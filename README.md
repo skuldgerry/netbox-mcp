@@ -406,14 +406,13 @@ The server will be accessible at `http://localhost:8000/mcp` for MCP clients. Yo
 For easier deployment and management, use Docker Compose. Create a `docker-compose.yml` file:
 
 ```yaml
-version: '3.8'
-
 services:
   netbox-mcp-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Use pre-built image from Docker Hub
+    image: skuldgerry/netbox-mcp:latest
+    
     container_name: netbox-mcp-server
+    
     environment:
       # Required: NetBox connection settings
       - NETBOX_URL=https://netbox.example.com/
@@ -451,6 +450,53 @@ docker-compose down
 - The service will be accessible at `http://localhost:8000/mcp` for MCP clients
 - For production, consider using environment variable substitution or secrets management
 
+### n8n Integration
+
+When connecting to the MCP server from n8n, ensure your HTTP client sends the required headers:
+
+**Required Headers:**
+- `Accept: text/event-stream` (required for Server-Sent Events)
+- `Content-Type: application/json` (for JSON-RPC requests)
+
+**n8n MCP Configuration:**
+
+1. **Enable MCP Access in n8n:**
+   - Navigate to `Settings > MCP Access` in n8n
+   - Enable MCP access if not already enabled
+
+2. **Configure MCP Server URL:**
+   - Use the full URL: `http://localhost:8000/mcp` (or your server's address)
+   - Ensure the server is running and accessible
+
+3. **If using a reverse proxy (Nginx/Traefik):**
+   - Disable gzip compression for the `/mcp` endpoint
+   - Disable proxy buffering
+   - Allow HTTP/1.1 connections
+   - Set appropriate timeouts (3600s recommended)
+
+   **Example Nginx Configuration:**
+   ```nginx
+   location /mcp {
+       proxy_pass http://127.0.0.1:8000/mcp;
+       proxy_http_version 1.1;
+       proxy_set_header Connection "";
+       proxy_buffering off;
+       proxy_cache off;
+       gzip off;
+       proxy_read_timeout 3600s;
+       proxy_send_timeout 3600s;
+   }
+   ```
+
+**Testing the Endpoint:**
+
+The `/mcp` endpoint requires SSE support. Direct browser access will show an error because browsers don't send the required `Accept: text/event-stream` header. This is expected behavior. Use an MCP-compatible client (like n8n) that properly handles SSE connections.
+
+**Troubleshooting:**
+- If you see "Not Acceptable: Client must accept text/event-stream", ensure your client sends the `Accept: text/event-stream` header
+- If connection fails, check server logs and verify the server is running
+- For n8n-specific issues, see the [n8n MCP documentation](https://docs.n8n.io/advanced-ai/accessing-n8n-mcp-server/)
+
 ## Write Operations Examples
 
 ### Creating Objects
@@ -461,8 +507,7 @@ netbox_create_site(
     name="New York Data Center",
     slug="nyc-dc",
     status="active",
-    region=1,  # Optional: region ID
-    tenant=2  # Optional: tenant ID
+    data={"region": 1, "tenant": 2}  # Optional: additional fields
 )
 ```
 
@@ -472,8 +517,7 @@ netbox_create_vlan(
     name="VLAN-100",
     vid=100,
     status="active",
-    site=1,  # Optional: site ID
-    tenant=2  # Optional: tenant ID
+    data={"site": 1, "tenant": 2}  # Optional: additional fields
 )
 ```
 
@@ -482,7 +526,7 @@ netbox_create_vlan(
 netbox_create_tenant(
     name="Acme Corporation",
     slug="acme-corp",
-    group=1  # Optional: tenant group ID
+    data={"group": 1}  # Optional: additional fields
 )
 ```
 
@@ -501,8 +545,7 @@ netbox_create_tag(
 ```python
 netbox_update_site(
     site_id=1,
-    status="planned",
-    description="Site is being planned for Q2 2024"
+    data={"status": "planned", "description": "Site is being planned for Q2 2024"}
 )
 ```
 
@@ -510,8 +553,7 @@ netbox_update_site(
 ```python
 netbox_update_vlan(
     vlan_id=5,
-    name="VLAN-200-Updated",
-    vid=200
+    data={"name": "VLAN-200-Updated", "vid": 200}
 )
 ```
 
