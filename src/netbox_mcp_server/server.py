@@ -617,7 +617,7 @@ def netbox_create_site(
     name: str,
     slug: str,
     status: str = "active",
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new site in NetBox.
@@ -626,33 +626,34 @@ def netbox_create_site(
         name: Site name (required)
         slug: URL-friendly identifier (required)
         status: Site status - "active", "planned", "staging", "decommissioning", "retired" (default: "active")
-        **kwargs: Additional optional fields (region, tenant, facility, etc.)
-                 See NetBox API documentation for all available fields
+        data: Additional optional fields as a dictionary (region, tenant, facility, etc.)
+              See NetBox API documentation for all available fields
 
     Returns:
         The created site object as a dict
     """
-    data = {"name": name, "slug": slug, "status": status}
-    data.update(kwargs)
-    return netbox.create("dcim/sites", data)
+    payload = {"name": name, "slug": slug, "status": status}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/sites", payload)
 
 
 @mcp.tool
 def netbox_update_site(
     site_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing site in NetBox.
 
     Args:
         site_id: The numeric ID of the site to update
-        **kwargs: Fields to update (name, slug, status, region, tenant, etc.)
+        data: Fields to update as a dictionary (name, slug, status, region, tenant, etc.)
 
     Returns:
         The updated site object as a dict
     """
-    return netbox.update("dcim/sites", site_id, kwargs)
+    return netbox.update("dcim/sites", site_id, data)
 
 
 @mcp.tool
@@ -673,7 +674,7 @@ def netbox_delete_site(site_id: int) -> bool:
 def netbox_create_tenant(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new tenant in NetBox.
@@ -681,32 +682,33 @@ def netbox_create_tenant(
     Args:
         name: Tenant name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (group, description, comments, etc.)
+        data: Additional optional fields as a dictionary (group, description, comments, etc.)
 
     Returns:
         The created tenant object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("tenancy/tenants", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("tenancy/tenants", payload)
 
 
 @mcp.tool
 def netbox_update_tenant(
     tenant_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing tenant in NetBox.
 
     Args:
         tenant_id: The numeric ID of the tenant to update
-        **kwargs: Fields to update (name, slug, group, description, etc.)
+        data: Fields to update as a dictionary (name, slug, group, description, etc.)
 
     Returns:
         The updated tenant object as a dict
     """
-    return netbox.update("tenancy/tenants", tenant_id, kwargs)
+    return netbox.update("tenancy/tenants", tenant_id, data)
 
 
 @mcp.tool
@@ -727,7 +729,7 @@ def netbox_delete_tenant(tenant_id: int) -> bool:
 def netbox_create_tenant_group(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new tenant group in NetBox.
@@ -735,32 +737,33 @@ def netbox_create_tenant_group(
     Args:
         name: Tenant group name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (parent, description, etc.)
+        data: Additional optional fields as a dictionary (parent, description, etc.)
 
     Returns:
         The created tenant group object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("tenancy/tenant-groups", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("tenancy/tenant-groups", payload)
 
 
 @mcp.tool
 def netbox_update_tenant_group(
     tenant_group_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing tenant group in NetBox.
 
     Args:
         tenant_group_id: The numeric ID of the tenant group to update
-        **kwargs: Fields to update (name, slug, parent, description, etc.)
+        data: Fields to update as a dictionary (name, slug, parent, description, etc.)
 
     Returns:
         The updated tenant group object as a dict
     """
-    return netbox.update("tenancy/tenant-groups", tenant_group_id, kwargs)
+    return netbox.update("tenancy/tenant-groups", tenant_group_id, data)
 
 
 @mcp.tool
@@ -782,7 +785,7 @@ def netbox_create_tag(
     name: str,
     slug: str | None = None,
     color: str | None = None,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new tag in NetBox.
@@ -791,36 +794,37 @@ def netbox_create_tag(
         name: Tag name (required)
         slug: URL-friendly identifier (optional, auto-generated from name if not provided)
         color: Hex color code (optional, e.g., "ff0000")
-        **kwargs: Additional optional fields (description, etc.)
+        data: Additional optional fields as a dictionary (description, etc.)
 
     Returns:
         The created tag object as a dict
     """
-    data = {"name": name}
+    payload = {"name": name}
     if slug:
-        data["slug"] = slug
+        payload["slug"] = slug
     if color:
-        data["color"] = color
-    data.update(kwargs)
-    return netbox.create("extras/tags", data)
+        payload["color"] = color
+    if data:
+        payload.update(data)
+    return netbox.create("extras/tags", payload)
 
 
 @mcp.tool
 def netbox_update_tag(
     tag_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing tag in NetBox.
 
     Args:
         tag_id: The numeric ID of the tag to update
-        **kwargs: Fields to update (name, slug, color, description, etc.)
+        data: Fields to update as a dictionary (name, slug, color, description, etc.)
 
     Returns:
         The updated tag object as a dict
     """
-    return netbox.update("extras/tags", tag_id, kwargs)
+    return netbox.update("extras/tags", tag_id, data)
 
 
 @mcp.tool
@@ -842,7 +846,7 @@ def netbox_create_vlan(
     name: str,
     vid: int,
     status: str = "active",
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new VLAN in NetBox.
@@ -851,32 +855,33 @@ def netbox_create_vlan(
         name: VLAN name (required)
         vid: VLAN ID (1-4094) (required)
         status: VLAN status - "active", "reserved", "deprecated" (default: "active")
-        **kwargs: Additional optional fields (site, group, tenant, role, description, etc.)
+        data: Additional optional fields as a dictionary (site, group, tenant, role, description, etc.)
 
     Returns:
         The created VLAN object as a dict
     """
-    data = {"name": name, "vid": vid, "status": status}
-    data.update(kwargs)
-    return netbox.create("ipam/vlans", data)
+    payload = {"name": name, "vid": vid, "status": status}
+    if data:
+        payload.update(data)
+    return netbox.create("ipam/vlans", payload)
 
 
 @mcp.tool
 def netbox_update_vlan(
     vlan_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing VLAN in NetBox.
 
     Args:
         vlan_id: The numeric ID of the VLAN to update
-        **kwargs: Fields to update (name, vid, status, site, group, tenant, etc.)
+        data: Fields to update as a dictionary (name, vid, status, site, group, tenant, etc.)
 
     Returns:
         The updated VLAN object as a dict
     """
-    return netbox.update("ipam/vlans", vlan_id, kwargs)
+    return netbox.update("ipam/vlans", vlan_id, data)
 
 
 @mcp.tool
@@ -897,7 +902,7 @@ def netbox_delete_vlan(vlan_id: int) -> bool:
 def netbox_create_vlan_group(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new VLAN group in NetBox.
@@ -905,32 +910,33 @@ def netbox_create_vlan_group(
     Args:
         name: VLAN group name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (scope_type, scope_id, description, etc.)
+        data: Additional optional fields as a dictionary (scope_type, scope_id, description, etc.)
 
     Returns:
         The created VLAN group object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("ipam/vlan-groups", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("ipam/vlan-groups", payload)
 
 
 @mcp.tool
 def netbox_update_vlan_group(
     vlan_group_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing VLAN group in NetBox.
 
     Args:
         vlan_group_id: The numeric ID of the VLAN group to update
-        **kwargs: Fields to update (name, slug, scope_type, scope_id, etc.)
+        data: Fields to update as a dictionary (name, slug, scope_type, scope_id, etc.)
 
     Returns:
         The updated VLAN group object as a dict
     """
-    return netbox.update("ipam/vlan-groups", vlan_group_id, kwargs)
+    return netbox.update("ipam/vlan-groups", vlan_group_id, data)
 
 
 @mcp.tool
@@ -955,7 +961,7 @@ def netbox_delete_vlan_group(vlan_group_id: int) -> bool:
 def netbox_create_region(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new region in NetBox.
@@ -963,32 +969,33 @@ def netbox_create_region(
     Args:
         name: Region name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (parent, description, etc.)
+        data: Additional optional fields as a dictionary (parent, description, etc.)
 
     Returns:
         The created region object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("dcim/regions", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/regions", payload)
 
 
 @mcp.tool
 def netbox_update_region(
     region_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing region in NetBox.
 
     Args:
         region_id: The numeric ID of the region to update
-        **kwargs: Fields to update (name, slug, parent, description, etc.)
+        data: Fields to update as a dictionary (name, slug, parent, description, etc.)
 
     Returns:
         The updated region object as a dict
     """
-    return netbox.update("dcim/regions", region_id, kwargs)
+    return netbox.update("dcim/regions", region_id, data)
 
 
 @mcp.tool
@@ -1009,7 +1016,7 @@ def netbox_delete_region(region_id: int) -> bool:
 def netbox_create_location(
     name: str,
     site: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new location in NetBox.
@@ -1017,32 +1024,33 @@ def netbox_create_location(
     Args:
         name: Location name (required)
         site: Site ID (required)
-        **kwargs: Additional optional fields (parent, status, tenant, description, etc.)
+        data: Additional optional fields as a dictionary (parent, status, tenant, description, etc.)
 
     Returns:
         The created location object as a dict
     """
-    data = {"name": name, "site": site}
-    data.update(kwargs)
-    return netbox.create("dcim/locations", data)
+    payload = {"name": name, "site": site}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/locations", payload)
 
 
 @mcp.tool
 def netbox_update_location(
     location_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing location in NetBox.
 
     Args:
         location_id: The numeric ID of the location to update
-        **kwargs: Fields to update (name, site, parent, status, etc.)
+        data: Fields to update as a dictionary (name, site, parent, status, etc.)
 
     Returns:
         The updated location object as a dict
     """
-    return netbox.update("dcim/locations", location_id, kwargs)
+    return netbox.update("dcim/locations", location_id, data)
 
 
 @mcp.tool
@@ -1066,39 +1074,40 @@ def netbox_delete_location(location_id: int) -> bool:
 @mcp.tool
 def netbox_create_vrf(
     name: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new VRF in NetBox.
 
     Args:
         name: VRF name (required)
-        **kwargs: Additional optional fields (rd, tenant, description, etc.)
+        data: Additional optional fields as a dictionary (rd, tenant, description, etc.)
 
     Returns:
         The created VRF object as a dict
     """
-    data = {"name": name}
-    data.update(kwargs)
-    return netbox.create("ipam/vrfs", data)
+    payload = {"name": name}
+    if data:
+        payload.update(data)
+    return netbox.create("ipam/vrfs", payload)
 
 
 @mcp.tool
 def netbox_update_vrf(
     vrf_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing VRF in NetBox.
 
     Args:
         vrf_id: The numeric ID of the VRF to update
-        **kwargs: Fields to update (name, rd, tenant, description, etc.)
+        data: Fields to update as a dictionary (name, rd, tenant, description, etc.)
 
     Returns:
         The updated VRF object as a dict
     """
-    return netbox.update("ipam/vrfs", vrf_id, kwargs)
+    return netbox.update("ipam/vrfs", vrf_id, data)
 
 
 @mcp.tool
@@ -1118,39 +1127,40 @@ def netbox_delete_vrf(vrf_id: int) -> bool:
 @mcp.tool
 def netbox_create_prefix(
     prefix: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new prefix in NetBox.
 
     Args:
         prefix: IP prefix in CIDR notation (required, e.g., "192.168.1.0/24")
-        **kwargs: Additional optional fields (vrf, tenant, site, status, role, description, etc.)
+        data: Additional optional fields as a dictionary (vrf, tenant, site, status, role, description, etc.)
 
     Returns:
         The created prefix object as a dict
     """
-    data = {"prefix": prefix}
-    data.update(kwargs)
-    return netbox.create("ipam/prefixes", data)
+    payload = {"prefix": prefix}
+    if data:
+        payload.update(data)
+    return netbox.create("ipam/prefixes", payload)
 
 
 @mcp.tool
 def netbox_update_prefix(
     prefix_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing prefix in NetBox.
 
     Args:
         prefix_id: The numeric ID of the prefix to update
-        **kwargs: Fields to update (prefix, vrf, tenant, site, status, etc.)
+        data: Fields to update as a dictionary (prefix, vrf, tenant, site, status, etc.)
 
     Returns:
         The updated prefix object as a dict
     """
-    return netbox.update("ipam/prefixes", prefix_id, kwargs)
+    return netbox.update("ipam/prefixes", prefix_id, data)
 
 
 @mcp.tool
@@ -1170,39 +1180,40 @@ def netbox_delete_prefix(prefix_id: int) -> bool:
 @mcp.tool
 def netbox_create_ip_address(
     address: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new IP address in NetBox.
 
     Args:
         address: IP address in CIDR notation (required, e.g., "192.168.1.1/24")
-        **kwargs: Additional optional fields (vrf, tenant, status, dns_name, description, etc.)
+        data: Additional optional fields as a dictionary (vrf, tenant, status, dns_name, description, etc.)
 
     Returns:
         The created IP address object as a dict
     """
-    data = {"address": address}
-    data.update(kwargs)
-    return netbox.create("ipam/ip-addresses", data)
+    payload = {"address": address}
+    if data:
+        payload.update(data)
+    return netbox.create("ipam/ip-addresses", payload)
 
 
 @mcp.tool
 def netbox_update_ip_address(
     ip_address_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing IP address in NetBox.
 
     Args:
         ip_address_id: The numeric ID of the IP address to update
-        **kwargs: Fields to update (address, vrf, tenant, status, dns_name, etc.)
+        data: Fields to update as a dictionary (address, vrf, tenant, status, dns_name, etc.)
 
     Returns:
         The updated IP address object as a dict
     """
-    return netbox.update("ipam/ip-addresses", ip_address_id, kwargs)
+    return netbox.update("ipam/ip-addresses", ip_address_id, data)
 
 
 @mcp.tool
@@ -1223,7 +1234,7 @@ def netbox_delete_ip_address(ip_address_id: int) -> bool:
 def netbox_create_ip_range(
     start_address: str,
     end_address: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new IP range in NetBox.
@@ -1231,32 +1242,33 @@ def netbox_create_ip_range(
     Args:
         start_address: Starting IP address (required)
         end_address: Ending IP address (required)
-        **kwargs: Additional optional fields (vrf, tenant, status, role, description, etc.)
+        data: Additional optional fields as a dictionary (vrf, tenant, status, role, description, etc.)
 
     Returns:
         The created IP range object as a dict
     """
-    data = {"start_address": start_address, "end_address": end_address}
-    data.update(kwargs)
-    return netbox.create("ipam/ip-ranges", data)
+    payload = {"start_address": start_address, "end_address": end_address}
+    if data:
+        payload.update(data)
+    return netbox.create("ipam/ip-ranges", payload)
 
 
 @mcp.tool
 def netbox_update_ip_range(
     ip_range_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing IP range in NetBox.
 
     Args:
         ip_range_id: The numeric ID of the IP range to update
-        **kwargs: Fields to update (start_address, end_address, vrf, tenant, etc.)
+        data: Fields to update as a dictionary (start_address, end_address, vrf, tenant, etc.)
 
     Returns:
         The updated IP range object as a dict
     """
-    return netbox.update("ipam/ip-ranges", ip_range_id, kwargs)
+    return netbox.update("ipam/ip-ranges", ip_range_id, data)
 
 
 @mcp.tool
@@ -1282,7 +1294,7 @@ def netbox_create_device(
     name: str,
     device_type: int,
     site: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new device in NetBox.
@@ -1291,32 +1303,33 @@ def netbox_create_device(
         name: Device name (required)
         device_type: Device type ID (required)
         site: Site ID (required)
-        **kwargs: Additional optional fields (rack, position, face, status, tenant, role, etc.)
+        data: Additional optional fields as a dictionary (rack, position, face, status, tenant, role, etc.)
 
     Returns:
         The created device object as a dict
     """
-    data = {"name": name, "device_type": device_type, "site": site}
-    data.update(kwargs)
-    return netbox.create("dcim/devices", data)
+    payload = {"name": name, "device_type": device_type, "site": site}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/devices", payload)
 
 
 @mcp.tool
 def netbox_update_device(
     device_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing device in NetBox.
 
     Args:
         device_id: The numeric ID of the device to update
-        **kwargs: Fields to update (name, device_type, site, rack, status, etc.)
+        data: Fields to update as a dictionary (name, device_type, site, rack, status, etc.)
 
     Returns:
         The updated device object as a dict
     """
-    return netbox.update("dcim/devices", device_id, kwargs)
+    return netbox.update("dcim/devices", device_id, data)
 
 
 @mcp.tool
@@ -1338,7 +1351,7 @@ def netbox_create_interface(
     name: str,
     device: int,
     type: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new interface in NetBox.
@@ -1347,32 +1360,33 @@ def netbox_create_interface(
         name: Interface name (required)
         device: Device ID (required)
         type: Interface type (required, e.g., "1000base-t", "10gbase-x-sfpp", "virtual")
-        **kwargs: Additional optional fields (enabled, description, mac_address, etc.)
+        data: Additional optional fields as a dictionary (enabled, description, mac_address, etc.)
 
     Returns:
         The created interface object as a dict
     """
-    data = {"name": name, "device": device, "type": type}
-    data.update(kwargs)
-    return netbox.create("dcim/interfaces", data)
+    payload = {"name": name, "device": device, "type": type}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/interfaces", payload)
 
 
 @mcp.tool
 def netbox_update_interface(
     interface_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing interface in NetBox.
 
     Args:
         interface_id: The numeric ID of the interface to update
-        **kwargs: Fields to update (name, device, type, enabled, description, etc.)
+        data: Fields to update as a dictionary (name, device, type, enabled, description, etc.)
 
     Returns:
         The updated interface object as a dict
     """
-    return netbox.update("dcim/interfaces", interface_id, kwargs)
+    return netbox.update("dcim/interfaces", interface_id, data)
 
 
 @mcp.tool
@@ -1394,7 +1408,7 @@ def netbox_create_device_type(
     manufacturer: int,
     model: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new device type in NetBox.
@@ -1403,32 +1417,33 @@ def netbox_create_device_type(
         manufacturer: Manufacturer ID (required)
         model: Device model name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (u_height, is_full_depth, part_number, etc.)
+        data: Additional optional fields as a dictionary (u_height, is_full_depth, part_number, etc.)
 
     Returns:
         The created device type object as a dict
     """
-    data = {"manufacturer": manufacturer, "model": model, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("dcim/device-types", data)
+    payload = {"manufacturer": manufacturer, "model": model, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/device-types", payload)
 
 
 @mcp.tool
 def netbox_update_device_type(
     device_type_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing device type in NetBox.
 
     Args:
         device_type_id: The numeric ID of the device type to update
-        **kwargs: Fields to update (manufacturer, model, slug, u_height, etc.)
+        data: Fields to update as a dictionary (manufacturer, model, slug, u_height, etc.)
 
     Returns:
         The updated device type object as a dict
     """
-    return netbox.update("dcim/device-types", device_type_id, kwargs)
+    return netbox.update("dcim/device-types", device_type_id, data)
 
 
 @mcp.tool
@@ -1449,7 +1464,7 @@ def netbox_delete_device_type(device_type_id: int) -> bool:
 def netbox_create_manufacturer(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new manufacturer in NetBox.
@@ -1457,32 +1472,33 @@ def netbox_create_manufacturer(
     Args:
         name: Manufacturer name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (description, etc.)
+        data: Additional optional fields as a dictionary (description, etc.)
 
     Returns:
         The created manufacturer object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("dcim/manufacturers", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/manufacturers", payload)
 
 
 @mcp.tool
 def netbox_update_manufacturer(
     manufacturer_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing manufacturer in NetBox.
 
     Args:
         manufacturer_id: The numeric ID of the manufacturer to update
-        **kwargs: Fields to update (name, slug, description, etc.)
+        data: Fields to update as a dictionary (name, slug, description, etc.)
 
     Returns:
         The updated manufacturer object as a dict
     """
-    return netbox.update("dcim/manufacturers", manufacturer_id, kwargs)
+    return netbox.update("dcim/manufacturers", manufacturer_id, data)
 
 
 @mcp.tool
@@ -1503,7 +1519,7 @@ def netbox_delete_manufacturer(manufacturer_id: int) -> bool:
 def netbox_create_rack(
     name: str,
     site: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new rack in NetBox.
@@ -1511,32 +1527,33 @@ def netbox_create_rack(
     Args:
         name: Rack name (required)
         site: Site ID (required)
-        **kwargs: Additional optional fields (facility_id, tenant, status, role, type, u_height, etc.)
+        data: Additional optional fields as a dictionary (facility_id, tenant, status, role, type, u_height, etc.)
 
     Returns:
         The created rack object as a dict
     """
-    data = {"name": name, "site": site}
-    data.update(kwargs)
-    return netbox.create("dcim/racks", data)
+    payload = {"name": name, "site": site}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/racks", payload)
 
 
 @mcp.tool
 def netbox_update_rack(
     rack_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing rack in NetBox.
 
     Args:
         rack_id: The numeric ID of the rack to update
-        **kwargs: Fields to update (name, site, facility_id, tenant, status, etc.)
+        data: Fields to update as a dictionary (name, site, facility_id, tenant, status, etc.)
 
     Returns:
         The updated rack object as a dict
     """
-    return netbox.update("dcim/racks", rack_id, kwargs)
+    return netbox.update("dcim/racks", rack_id, data)
 
 
 @mcp.tool
@@ -1557,7 +1574,7 @@ def netbox_delete_rack(rack_id: int) -> bool:
 def netbox_create_rack_role(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new rack role in NetBox.
@@ -1565,14 +1582,15 @@ def netbox_create_rack_role(
     Args:
         name: Rack role name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (color, description, etc.)
+        data: Additional optional fields as a dictionary (color, description, etc.)
 
     Returns:
         The created rack role object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("dcim/rack-roles", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/rack-roles", payload)
 
 
 @mcp.tool
@@ -1581,7 +1599,7 @@ def netbox_create_cable(
     termination_a_id: int,
     termination_b_type: str,
     termination_b_id: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new cable in NetBox.
@@ -1591,19 +1609,20 @@ def netbox_create_cable(
         termination_a_id: ID of termination A
         termination_b_type: Content type for termination B (e.g., "dcim.interface")
         termination_b_id: ID of termination B
-        **kwargs: Additional optional fields (type, status, label, color, length, etc.)
+        data: Additional optional fields as a dictionary (type, status, label, color, length, etc.)
 
     Returns:
         The created cable object as a dict
     """
-    data = {
+    payload = {
         "termination_a_type": termination_a_type,
         "termination_a_id": termination_a_id,
         "termination_b_type": termination_b_type,
         "termination_b_id": termination_b_id,
     }
-    data.update(kwargs)
-    return netbox.create("dcim/cables", data)
+    if data:
+        payload.update(data)
+    return netbox.create("dcim/cables", payload)
 
 
 @mcp.tool
@@ -1629,7 +1648,7 @@ def netbox_create_circuit(
     cid: str,
     provider: int,
     type: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new circuit in NetBox.
@@ -1638,32 +1657,33 @@ def netbox_create_circuit(
         cid: Circuit ID (required)
         provider: Provider ID (required)
         type: Circuit type ID (required)
-        **kwargs: Additional optional fields (status, tenant, install_date, commit_rate, etc.)
+        data: Additional optional fields as a dictionary (status, tenant, install_date, commit_rate, etc.)
 
     Returns:
         The created circuit object as a dict
     """
-    data = {"cid": cid, "provider": provider, "type": type}
-    data.update(kwargs)
-    return netbox.create("circuits/circuits", data)
+    payload = {"cid": cid, "provider": provider, "type": type}
+    if data:
+        payload.update(data)
+    return netbox.create("circuits/circuits", payload)
 
 
 @mcp.tool
 def netbox_update_circuit(
     circuit_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing circuit in NetBox.
 
     Args:
         circuit_id: The numeric ID of the circuit to update
-        **kwargs: Fields to update (cid, provider, type, status, tenant, etc.)
+        data: Fields to update as a dictionary (cid, provider, type, status, tenant, etc.)
 
     Returns:
         The updated circuit object as a dict
     """
-    return netbox.update("circuits/circuits", circuit_id, kwargs)
+    return netbox.update("circuits/circuits", circuit_id, data)
 
 
 @mcp.tool
@@ -1684,7 +1704,7 @@ def netbox_delete_circuit(circuit_id: int) -> bool:
 def netbox_create_provider(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new provider in NetBox.
@@ -1692,32 +1712,33 @@ def netbox_create_provider(
     Args:
         name: Provider name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (asn, account, portal_url, noc_contact, etc.)
+        data: Additional optional fields as a dictionary (asn, account, portal_url, noc_contact, etc.)
 
     Returns:
         The created provider object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("circuits/providers", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("circuits/providers", payload)
 
 
 @mcp.tool
 def netbox_update_provider(
     provider_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing provider in NetBox.
 
     Args:
         provider_id: The numeric ID of the provider to update
-        **kwargs: Fields to update (name, slug, asn, account, etc.)
+        data: Fields to update as a dictionary (name, slug, asn, account, etc.)
 
     Returns:
         The updated provider object as a dict
     """
-    return netbox.update("circuits/providers", provider_id, kwargs)
+    return netbox.update("circuits/providers", provider_id, data)
 
 
 @mcp.tool
@@ -1738,7 +1759,7 @@ def netbox_delete_provider(provider_id: int) -> bool:
 def netbox_create_circuit_type(
     name: str,
     slug: str,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new circuit type in NetBox.
@@ -1746,32 +1767,33 @@ def netbox_create_circuit_type(
     Args:
         name: Circuit type name (required)
         slug: URL-friendly identifier (required)
-        **kwargs: Additional optional fields (description, etc.)
+        data: Additional optional fields as a dictionary (description, etc.)
 
     Returns:
         The created circuit type object as a dict
     """
-    data = {"name": name, "slug": slug}
-    data.update(kwargs)
-    return netbox.create("circuits/circuit-types", data)
+    payload = {"name": name, "slug": slug}
+    if data:
+        payload.update(data)
+    return netbox.create("circuits/circuit-types", payload)
 
 
 @mcp.tool
 def netbox_update_circuit_type(
     circuit_type_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing circuit type in NetBox.
 
     Args:
         circuit_type_id: The numeric ID of the circuit type to update
-        **kwargs: Fields to update (name, slug, description, etc.)
+        data: Fields to update as a dictionary (name, slug, description, etc.)
 
     Returns:
         The updated circuit type object as a dict
     """
-    return netbox.update("circuits/circuit-types", circuit_type_id, kwargs)
+    return netbox.update("circuits/circuit-types", circuit_type_id, data)
 
 
 @mcp.tool
@@ -1796,7 +1818,7 @@ def netbox_delete_circuit_type(circuit_type_id: int) -> bool:
 def netbox_create_virtual_machine(
     name: str,
     cluster: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new virtual machine in NetBox.
@@ -1804,32 +1826,33 @@ def netbox_create_virtual_machine(
     Args:
         name: Virtual machine name (required)
         cluster: Cluster ID (required)
-        **kwargs: Additional optional fields (status, role, tenant, platform, vcpus, memory, disk, etc.)
+        data: Additional optional fields as a dictionary (status, role, tenant, platform, vcpus, memory, disk, etc.)
 
     Returns:
         The created virtual machine object as a dict
     """
-    data = {"name": name, "cluster": cluster}
-    data.update(kwargs)
-    return netbox.create("virtualization/virtual-machines", data)
+    payload = {"name": name, "cluster": cluster}
+    if data:
+        payload.update(data)
+    return netbox.create("virtualization/virtual-machines", payload)
 
 
 @mcp.tool
 def netbox_update_virtual_machine(
     vm_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing virtual machine in NetBox.
 
     Args:
         vm_id: The numeric ID of the virtual machine to update
-        **kwargs: Fields to update (name, cluster, status, role, tenant, etc.)
+        data: Fields to update as a dictionary (name, cluster, status, role, tenant, etc.)
 
     Returns:
         The updated virtual machine object as a dict
     """
-    return netbox.update("virtualization/virtual-machines", vm_id, kwargs)
+    return netbox.update("virtualization/virtual-machines", vm_id, data)
 
 
 @mcp.tool
@@ -1850,7 +1873,7 @@ def netbox_delete_virtual_machine(vm_id: int) -> bool:
 def netbox_create_cluster(
     name: str,
     type: int,
-    **kwargs: Any,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create a new cluster in NetBox.
@@ -1858,32 +1881,33 @@ def netbox_create_cluster(
     Args:
         name: Cluster name (required)
         type: Cluster type ID (required)
-        **kwargs: Additional optional fields (group, status, tenant, site, etc.)
+        data: Additional optional fields as a dictionary (group, status, tenant, site, etc.)
 
     Returns:
         The created cluster object as a dict
     """
-    data = {"name": name, "type": type}
-    data.update(kwargs)
-    return netbox.create("virtualization/clusters", data)
+    payload = {"name": name, "type": type}
+    if data:
+        payload.update(data)
+    return netbox.create("virtualization/clusters", payload)
 
 
 @mcp.tool
 def netbox_update_cluster(
     cluster_id: int,
-    **kwargs: Any,
+    data: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Update an existing cluster in NetBox.
 
     Args:
         cluster_id: The numeric ID of the cluster to update
-        **kwargs: Fields to update (name, type, group, status, tenant, etc.)
+        data: Fields to update as a dictionary (name, type, group, status, tenant, etc.)
 
     Returns:
         The updated cluster object as a dict
     """
-    return netbox.update("virtualization/clusters", cluster_id, kwargs)
+    return netbox.update("virtualization/clusters", cluster_id, data)
 
 
 @mcp.tool
@@ -1906,6 +1930,7 @@ def _endpoint_for_type(object_type: str) -> str:
     e.g., "dcim.device" -> "dcim/devices"
     """
     return NETBOX_OBJECT_TYPES[object_type]['endpoint']
+
 
 
 def main() -> None:
