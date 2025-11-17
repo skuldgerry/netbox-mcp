@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  netbox-mcp-server:
+    # Build from local Dockerfile or use a pre-built image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Alternative: use a pre-built image (uncomment if available)
+    # image: netboxlabs/netbox-mcp-server:latest
+    
+    container_name: netbox-mcp-server
+    
+    # Environment variables (no .env file required)
+    environment:
+      # Required: NetBox connection settings
+      - NETBOX_URL=https://netbox.example.com/
+      - NETBOX_TOKEN=your_api_token_here
+      
+      # Transport configuration (HTTP required for Docker)
+      - TRANSPORT=http
+      - HOST=0.0.0.0
+      - PORT=8000
+      
+      # Optional: Security and logging
+      - VERIFY_SSL=true
+      - LOG_LEVEL=INFO
+    
+    # Expose HTTP port for MCP clients
+    ports:
+      - "8000:8000"
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check (optional - checks if HTTP server is responding)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/mcp/health"] || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
