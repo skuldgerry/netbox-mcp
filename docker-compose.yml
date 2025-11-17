@@ -2,12 +2,8 @@ version: '3.8'
 
 services:
   netbox-mcp-server:
-    # Build from local Dockerfile or use a pre-built image
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Alternative: use a pre-built image (uncomment if available)
-    # image: netboxlabs/netbox-mcp-server:latest
+    # Use pre-built image from Docker Hub
+    image: skuldgerry/netbox-mcp:latest
     
     container_name: netbox-mcp-server
     
