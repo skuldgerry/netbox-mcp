@@ -1,0 +1,4 @@
+interface:
+  display_name: "NetBox MCP Operator"
+  short_description: "Safely query and manage NetBox through MCP"
+  default_prompt: "Use $netbox-mcp-operator to inspect my NetBox data and make the requested changes safely."
