@@ -4,26 +4,45 @@ build-backend = "hatchling.build"
 
 [project]
 name = "netbox-mcp-server"
-version = "1.0.0"
-description = "A read-only MCP server for NetBox"
+version = "1.1.0"
+description = "A Model Context Protocol server for reading and managing NetBox"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+license = "Apache-2.0"
+requires-python = ">=3.11,<3.15"
+authors = [{ name = "NetBox MCP Enhanced contributors" }]
+keywords = ["netbox", "mcp", "model-context-protocol", "fastmcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = [
     "httpx>=0.28.1",
-    "fastmcp>=2.13.0,<2.14",
-    "requests>=2.31.0",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
+    "fastmcp>=3.4.7,<4",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
 ]
 
 [project.scripts]
 netbox-mcp-server = "netbox_mcp_server.server:main"
 
+[project.urls]
+Homepage = "https://github.com/skuldgerry/netbox-mcp"
+Repository = "https://github.com/skuldgerry/netbox-mcp"
+Issues = "https://github.com/skuldgerry/netbox-mcp/issues"
+Changelog = "https://github.com/skuldgerry/netbox-mcp/blob/main/CHANGELOG.md"
+
 [dependency-groups]
 dev = [
-    "pytest>=8.4.2",
-    "pytest-cov>=7.0.0",
-    "python-semantic-release>=10.4.1",
+    "pre-commit>=4.6.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "python-semantic-release>=10.5.3",
+    "ruff>=0.15.16",
 ]
 
 [tool.semantic_release]
@@ -38,5 +57,25 @@ allowed_tags = ["feat", "fix", "docs", "chore", "refactor", "test", "ci", "perf"
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
 
-[tool.semantic_release.changelog]
+[tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "N", "S", "T20", "SIM", "LOG", "RUF", "PT"]
+ignore = ["E501"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "S107"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+skip-magic-trailing-comma = false
+line-ending = "auto"

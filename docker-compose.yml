@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   netbox-mcp-server:
     # Use pre-built image from Docker Hub
@@ -17,6 +15,17 @@ services:
       - TRANSPORT=http
       - HOST=0.0.0.0
       - PORT=8000
+
+      # Strongly recommended for any network-accessible HTTP deployment.
+      # Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"
+      - MCP_AUTH_TOKEN=replace_with_a_random_secret
+
+      # Browser clients only; JSON encoded list of allowed origins.
+      - CORS_ORIGINS=["http://localhost:6274"]
+
+      # Plugin discovery is opt-in. Discovered types remain read-only with empty rules.
+      - ENABLE_PLUGIN_DISCOVERY=false
+      - PLUGIN_WRITE_RULES={}
       
       # Optional: Security and logging
       - VERIFY_SSL=true
@@ -31,7 +40,7 @@ services:
     
     # Health check (optional - checks if HTTP server is responding)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/mcp/health"] || exit 1
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
       interval: 30s
       timeout: 10s
       retries: 3

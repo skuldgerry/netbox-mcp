@@ -3,9 +3,12 @@
 import logging
 import logging.config
 from typing import Any, Literal
+from urllib.parse import urlparse
 
-from pydantic import AnyUrl, SecretStr, field_validator, model_validator
+from pydantic import AnyUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PluginWriteOperation = Literal["create", "update", "delete"]
 
 
 class Settings(BaseSettings):
@@ -34,6 +37,33 @@ class Settings(BaseSettings):
     port: int = 8000
     """Port to bind HTTP server (only used when transport='http')"""
 
+    cors_origins: list[str] = Field(
+        default_factory=list,
+        description="Browser origins allowed for HTTP CORS. Use * to allow any origin.",
+    )
+
+    mcp_auth_token: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Optional bearer token required on the HTTP transport endpoint. "
+            "When set, requests to the MCP endpoint must send "
+            "'Authorization: Bearer <token>'. Only applied when transport='http'."
+        ),
+    )
+    """Optional bearer token protecting the HTTP transport endpoint (treated as secret)"""
+
+    # ===== Plugin Discovery and Write Settings =====
+    enable_plugin_discovery: bool = False
+    """Whether to auto-discover plugin object types from NetBox at startup"""
+
+    plugin_write_rules: dict[str, set[PluginWriteOperation]] = Field(
+        default_factory=dict,
+        description=(
+            "Operation-specific allowlist for generic writes to discovered plugin object types. "
+            "An empty mapping keeps all discovered plugin types read-only."
+        ),
+    )
+
     # ===== Security Settings =====
     verify_ssl: bool = True
     """Whether to verify SSL certificates when connecting to NetBox"""
@@ -61,6 +91,14 @@ class Settings(BaseSettings):
             raise ValueError(f"Port must be between 1 and 65535, got {v}")
         return v
 
+    @field_validator("mcp_auth_token", mode="after")
+    @classmethod
+    def normalize_auth_token(cls, v: SecretStr | None) -> SecretStr | None:
+        """Treat an empty or whitespace-only token as unset."""
+        if v is not None and not v.get_secret_value().strip():
+            return None
+        return v
+
     @field_validator("netbox_url")
     @classmethod
     def validate_netbox_url(cls, v: AnyUrl) -> AnyUrl:
@@ -73,8 +111,41 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_http_transport_requirements(self) -> "Settings":
-        """No additional validation needed for HTTP transport; defaults are appropriate."""
+        """Validate configuration relationships that span multiple settings."""
+        if self.plugin_write_rules and not self.enable_plugin_discovery:
+            raise ValueError("PLUGIN_WRITE_RULES requires ENABLE_PLUGIN_DISCOVERY=true")
+
+        for object_type, operations in self.plugin_write_rules.items():
+            parts = object_type.split(".")
+            if (
+                len(parts) != 2
+                or not all(parts)
+                or any(not part.replace("_", "").isalnum() for part in parts)
+                or "*" in object_type
+            ):
+                raise ValueError(
+                    "PLUGIN_WRITE_RULES keys must be exact dotted object types "
+                    f"such as 'netbox_dns.zone'; got {object_type!r}"
+                )
+            if not operations:
+                raise ValueError(
+                    f"PLUGIN_WRITE_RULES entry {object_type!r} must allow at least one operation"
+                )
         return self
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def validate_cors_origins(cls, v: object) -> list[str]:
+        """Ensure each CORS origin is a valid URL."""
+        for origin in v:
+            if origin == "*":
+                continue
+            parsed = urlparse(origin)
+            if not parsed.scheme or not parsed.netloc:
+                raise ValueError(
+                    f"Invalid CORS_ORIGIN: {origin!r} (expected format: http://host:port)"
+                )
+        return v
 
     def get_effective_config_summary(self) -> dict:
         """
@@ -83,15 +154,28 @@ class Settings(BaseSettings):
         Returns:
             Dictionary with configuration values (secrets masked)
         """
-        return {
+        summary: dict[str, Any] = {
             "netbox_url": str(self.netbox_url),
             "netbox_token": "***REDACTED***",
             "transport": self.transport,
-            "host": self.host if self.transport == "http" else "N/A",
-            "port": self.port if self.transport == "http" else "N/A",
             "verify_ssl": self.verify_ssl,
+            "enable_plugin_discovery": self.enable_plugin_discovery,
+            "plugin_write_rules": {
+                object_type: sorted(operations)
+                for object_type, operations in sorted(self.plugin_write_rules.items())
+            },
             "log_level": self.log_level,
         }
+        if self.transport == "http":
+            summary.update(
+                {
+                    "host": self.host,
+                    "port": self.port,
+                    "cors_origins": self.cors_origins,
+                    "mcp_auth_token": "***REDACTED***" if self.mcp_auth_token else None,
+                }
+            )
+        return summary
 
 
 def configure_logging(
@@ -125,9 +209,6 @@ def configure_logging(
                 "level": "WARNING" if log_level != "DEBUG" else "DEBUG",
             },
             "httpx": {
-                "level": "WARNING" if log_level != "DEBUG" else "DEBUG",
-            },
-            "requests": {
                 "level": "WARNING" if log_level != "DEBUG" else "DEBUG",
             },
         },

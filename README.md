@@ -7,7 +7,8 @@ This is an enhanced [Model Context Protocol](https://modelcontextprotocol.io/) s
 ## What's Enhanced?
 
 This version extends the official NetBox MCP server with:
-- ✅ **50+ write tools** for creating, updating, and deleting NetBox objects
+- ✅ **72 mutation tools** for creating, updating, and deleting NetBox objects
+- ✅ **FastMCP 3.4.7** with optional bearer authentication for HTTP deployments
 - ✅ **Priority support** for Sites, Tenants, Tags, and VLANs
 - ✅ **Docker Compose** deployment without requiring `.env` files
 - ✅ **HTTP transport** support for web clients (OpenWebUI, n8n)
@@ -92,7 +93,9 @@ The server includes comprehensive write operations for managing NetBox objects. 
 | `netbox_update_object` | Generic update for any NetBox object type |
 | `netbox_delete_object` | Generic delete for any NetBox object type |
 
-> Note: the set of supported object types is explicitly defined and limited to the core NetBox objects for now, and won't work with object types from plugins.
+> Plugin object types can be discovered at startup with `ENABLE_PLUGIN_DISCOVERY=true`. Discovery
+> is opt-in and plugin types are read-only unless specific generic write operations are explicitly
+> allowed with `PLUGIN_WRITE_RULES`.
 
 ## Usage
 
@@ -145,6 +148,7 @@ For HTTP transport, first start the server manually:
 NETBOX_URL=https://netbox.example.com/ \
 NETBOX_TOKEN=<your-api-token> \
 TRANSPORT=http \
+MCP_AUTH_TOKEN=<a-strong-random-token> \
 uv run netbox-mcp-server
 ```
 
@@ -159,6 +163,7 @@ claude mcp add --transport http netbox http://127.0.0.1:8000/mcp
 
 - The URL **must** include the protocol prefix (`http://` or `https://`)
 - The default endpoint is `/mcp` when using HTTP transport
+- When `MCP_AUTH_TOKEN` is set, clients must send `Authorization: Bearer <token>`
 - The server must be running before Claude Code can connect
 - Verify the connection with `claude mcp list` - you should see a ✓ next to the server name
 
@@ -262,8 +267,44 @@ The server supports multiple configuration sources with the following precedence
 | `TRANSPORT` | `stdio` \| `http` | `stdio` | No | MCP transport protocol |
 | `HOST` | String | `127.0.0.1` | If HTTP | Host address for HTTP server |
 | `PORT` | Integer | `8000` | If HTTP | Port for HTTP server |
+| `MCP_AUTH_TOKEN` | String | - | No | Bearer token required on the HTTP endpoint. When unset, HTTP is unauthenticated. |
+| `CORS_ORIGINS` | JSON array | `[]` | No | Browser origins allowed to access the HTTP endpoint |
+| `ENABLE_PLUGIN_DISCOVERY` | Boolean | `false` | No | Discover installed plugin models that expose NetBox REST endpoints |
+| `PLUGIN_WRITE_RULES` | JSON object | `{}` | No | Exact plugin object types and generic write operations to enable; requires discovery |
 | `VERIFY_SSL` | Boolean | `true` | No | Whether to verify SSL certificates |
 | `LOG_LEVEL` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` | `INFO` | No | Logging verbosity |
+
+### Plugin Discovery and Write Opt-in
+
+NetBox exposes installed plugin models through its object-types API. When discovery is enabled, the
+server registers plugin models that declare REST endpoints under `/api/plugins/`. They become
+available to the generic read tools and search, but all plugin writes remain disabled by default.
+
+Enable read-only discovery with environment variables:
+
+```env
+ENABLE_PLUGIN_DISCOVERY=true
+PLUGIN_WRITE_RULES={}
+```
+
+Allow only specific generic write operations using exact dotted object types:
+
+```env
+ENABLE_PLUGIN_DISCOVERY=true
+PLUGIN_WRITE_RULES={"netbox_dns.zone":["create","update"]}
+```
+
+The equivalent CLI configuration is:
+
+```bash
+uv run netbox-mcp-server \
+  --enable-plugin-discovery \
+  --plugin-write netbox_dns.zone:create,update
+```
+
+Valid operations are `create`, `update`, and `delete`. Wildcards are intentionally unsupported.
+Rules for types that are not discovered remain disabled and generate a startup warning. NetBox API
+permissions are still the final authorization boundary, so use a least-privilege `NETBOX_TOKEN`.
 
 ### Transport Examples
 
@@ -288,7 +329,7 @@ For local Claude Desktop or Claude Code usage with stdio transport:
 
 #### HTTP Transport (Web Clients)
 
-For web-based MCP clients using HTTP/SSE transport:
+For web-based MCP clients using Streamable HTTP transport:
 
 ```bash
 # Using environment variables
@@ -297,6 +338,7 @@ export NETBOX_TOKEN=<your-api-token>
 export TRANSPORT=http
 export HOST=127.0.0.1
 export PORT=8000
+export MCP_AUTH_TOKEN=<a-strong-random-token>
 
 uv run netbox-mcp-server
 
@@ -306,8 +348,18 @@ uv run netbox-mcp-server \
   --netbox-token <your-api-token> \
   --transport http \
   --host 127.0.0.1 \
-  --port 8000
+  --port 8000 \
+  --mcp-auth-token <a-strong-random-token>
 ```
+
+Generate a token locally with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+The server validates this shared secret; it does not issue or rotate client tokens. Store it in
+an environment variable or secret manager. Use TLS whenever the bearer token crosses a network.
 
 ### Example .env File
 
@@ -324,6 +376,13 @@ TRANSPORT=stdio
 # HTTP Transport Settings (only used if TRANSPORT=http)
 # HOST=127.0.0.1
 # PORT=8000
+# Bearer token required on the HTTP endpoint. When unset, HTTP is unauthenticated.
+# MCP_AUTH_TOKEN=a-strong-random-token
+# CORS_ORIGINS='["http://localhost:6274"]'
+
+# Plugin discovery (optional, defaults to false and read-only)
+ENABLE_PLUGIN_DISCOVERY=false
+PLUGIN_WRITE_RULES={}
 
 # Security (optional, defaults to true)
 VERIFY_SSL=true
@@ -361,11 +420,17 @@ docker run --rm \
   -e TRANSPORT=http \
   -e HOST=0.0.0.0 \
   -e PORT=8000 \
+  -e MCP_AUTH_TOKEN=<a-strong-random-token> \
   -p 8000:8000 \
   netbox-mcp-server:latest
 ```
 
-> **Note:** Docker containers require `TRANSPORT=http` since stdio transport doesn't work in containerized environments.
+> **Note:** These long-running container examples use `TRANSPORT=http`. Stdio can also run in a
+> container when an MCP client launches it interactively and keeps stdin attached.
+
+> **Security:** HTTP has no authentication unless `MCP_AUTH_TOKEN` is set. Binding to
+> `HOST=0.0.0.0` makes every write tool reachable by anyone who can access the port. Set a strong
+> token and terminate TLS at a reverse proxy or gateway before exposing the service to a network.
 
 **Connecting to NetBox on your host machine:**
 
@@ -379,6 +444,7 @@ docker run --rm \
   -e TRANSPORT=http \
   -e HOST=0.0.0.0 \
   -e PORT=8000 \
+  -e MCP_AUTH_TOKEN=<a-strong-random-token> \
   -p 8000:8000 \
   netbox-mcp-server:latest
 ```
@@ -393,6 +459,7 @@ docker run --rm \
   -e NETBOX_TOKEN=<your-api-token> \
   -e TRANSPORT=http \
   -e HOST=0.0.0.0 \
+  -e MCP_AUTH_TOKEN=<a-strong-random-token> \
   -e LOG_LEVEL=DEBUG \
   -e VERIFY_SSL=false \
   -p 8000:8000 \
@@ -422,6 +489,8 @@ services:
       - TRANSPORT=http
       - HOST=0.0.0.0
       - PORT=8000
+      - MCP_AUTH_TOKEN=replace_with_a_random_secret
+      - CORS_ORIGINS=["http://localhost:6274"]
       
       # Optional: Security and logging
       - VERIFY_SSL=true
@@ -446,6 +515,7 @@ docker-compose down
 
 **Important Notes:**
 - Update `NETBOX_URL` and `NETBOX_TOKEN` in the `docker-compose.yml` file before starting
+- Replace `MCP_AUTH_TOKEN` with a strong random secret and configure clients to send it as a bearer token
 - No `.env` file is required - all configuration is in the compose file
 - The service will be accessible at `http://localhost:8000/mcp` for MCP clients
 - For production, consider using environment variable substitution or secrets management
@@ -457,6 +527,7 @@ When connecting to the MCP server from n8n, ensure your HTTP client sends the re
 **Required Headers:**
 - `Accept: text/event-stream` (required for Server-Sent Events)
 - `Content-Type: application/json` (for JSON-RPC requests)
+- `Authorization: Bearer <token>` (required when `MCP_AUTH_TOKEN` is configured)
 
 **n8n MCP Configuration:**
 

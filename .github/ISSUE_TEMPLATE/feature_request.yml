@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a focused enhancement or new NetBox tool
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include the relevant NetBox endpoint and permissions if known.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility considerations
+      description: Note affected NetBox versions, transports, or existing tool schemas.

@@ -40,7 +40,11 @@ Prefer the specialized family because its signature makes required fields and re
 | Extras | `extras.tag`, `extras.configcontext`, `extras.customfield`, `extras.journalentry`, `extras.webhook` |
 | VPN and wireless | `vpn.tunnel`, `vpn.l2vpn`, `wireless.wirelesslan`, `wireless.wirelesslink` |
 
-The complete supported set lives in `src/netbox_mcp_server/netbox_types.py`. Do not assume plugin-provided NetBox types are supported.
+The core supported set lives in `src/netbox_mcp_server/netbox_types.py`. When
+`ENABLE_PLUGIN_DISCOVERY=true`, installed plugin models with REST endpoints under `/api/plugins/`
+are added to the generic read tools at startup. Plugin types are read-only unless the administrator
+has enabled an exact type and operation in `PLUGIN_WRITE_RULES`; never infer that a plugin write is
+available from discovery alone.
 
 ## Efficient field sets
 

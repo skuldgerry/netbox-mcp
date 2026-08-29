@@ -1,14 +1,39 @@
 import argparse
+import asyncio
+import hashlib
+import hmac
 import logging
 import sys
 from typing import Annotated, Any
 
+import httpx
 from fastmcp import FastMCP
-from pydantic import Field
+from fastmcp.server.auth import AccessToken, TokenVerifier
+from pydantic import Field, SecretStr
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 from netbox_mcp_server.config import Settings, configure_logging
 from netbox_mcp_server.netbox_client import NetBoxRestClient
 from netbox_mcp_server.netbox_types import NETBOX_OBJECT_TYPES
+
+PLUGIN_WRITE_OPERATIONS = {"create", "update", "delete"}
+
+
+def parse_plugin_write_rule(value: str) -> tuple[str, set[str]]:
+    """Parse TYPE:create,update syntax used by the repeatable CLI option."""
+    object_type, separator, operation_text = value.partition(":")
+    operations = {
+        operation.strip().lower() for operation in operation_text.split(",") if operation.strip()
+    }
+    invalid_operations = operations - PLUGIN_WRITE_OPERATIONS
+    if not separator or not object_type.strip() or not operations or invalid_operations:
+        raise argparse.ArgumentTypeError(
+            "plugin write rules must use TYPE:create,update,delete with one or more valid operations"
+        )
+    return object_type.strip(), operations
 
 
 def parse_cli_args() -> dict[str, Any]:
@@ -52,6 +77,37 @@ def parse_cli_args() -> dict[str, Any]:
         type=int,
         help="Port for HTTP server (default: 8000)",
     )
+    parser.add_argument(
+        "--cors-origins",
+        action="append",
+        help="CORS origins (repeat flag). Use * to allow any origin (default: none)",
+    )
+    parser.add_argument(
+        "--mcp-auth-token",
+        type=str,
+        help=(
+            "Bearer token required on the HTTP transport endpoint "
+            "(prefer the MCP_AUTH_TOKEN env var; default: none)"
+        ),
+    )
+
+    # Plugin discovery and write settings
+    parser.add_argument(
+        "--enable-plugin-discovery",
+        action="store_true",
+        default=None,
+        help="Auto-discover plugin object types from NetBox at startup",
+    )
+    parser.add_argument(
+        "--plugin-write",
+        action="append",
+        type=parse_plugin_write_rule,
+        metavar="TYPE:OPERATION[,OPERATION]",
+        help=(
+            "Allow generic writes for one discovered plugin type; repeat for multiple types. "
+            "Valid operations: create, update, delete"
+        ),
+    )
 
     # Security settings
     ssl_group = parser.add_mutually_exclusive_group()
@@ -90,12 +146,47 @@ def parse_cli_args() -> dict[str, Any]:
         overlay["host"] = args.host
     if args.port is not None:
         overlay["port"] = args.port
+    if args.cors_origins is not None:
+        overlay["cors_origins"] = args.cors_origins
+    if args.mcp_auth_token is not None:
+        overlay["mcp_auth_token"] = args.mcp_auth_token
+    if args.enable_plugin_discovery is not None:
+        overlay["enable_plugin_discovery"] = args.enable_plugin_discovery
+    if args.plugin_write is not None:
+        rules: dict[str, set[str]] = {}
+        for object_type, operations in args.plugin_write:
+            rules.setdefault(object_type, set()).update(operations)
+        overlay["plugin_write_rules"] = rules
     if args.verify_ssl is not None:
         overlay["verify_ssl"] = args.verify_ssl
     if args.log_level is not None:
         overlay["log_level"] = args.log_level
 
     return overlay
+
+
+class BearerTokenVerifier(TokenVerifier):
+    """Constant-time single-secret bearer check for the HTTP transport."""
+
+    def __init__(self, secret: str) -> None:
+        super().__init__()
+        self._secret_digest = hashlib.sha256(secret.encode("utf-8")).digest()
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Return an AccessToken for a matching bearer, or None to reject."""
+        if not token:
+            return None
+        token_digest = hashlib.sha256(token.encode("utf-8", "surrogatepass")).digest()
+        if not hmac.compare_digest(token_digest, self._secret_digest):
+            return None
+        return AccessToken(token=token, client_id="netbox-mcp-server", scopes=[])
+
+
+def build_http_auth(token: SecretStr | None) -> TokenVerifier | None:
+    """Build the HTTP transport auth provider from an optional bearer token."""
+    if token is None:
+        return None
+    return BearerTokenVerifier(token.get_secret_value())
 
 
 # Default object types for global search
@@ -112,6 +203,14 @@ DEFAULT_SEARCH_TYPES = [
 
 mcp = FastMCP("NetBox")
 netbox = None
+DISCOVERED_PLUGIN_OBJECT_TYPES: dict[str, dict[str, str]] = {}
+PLUGIN_WRITE_RULES: dict[str, set[str]] = {}
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(_request: Request) -> PlainTextResponse:
+    """Return a transport-independent liveness response for container probes."""
+    return PlainTextResponse("OK")
 
 
 def validate_filters(filters: dict) -> None:
@@ -132,7 +231,7 @@ def validate_filters(filters: dict) -> None:
     Raises:
         ValueError: If filter uses invalid multi-hop relationship traversal
     """
-    VALID_SUFFIXES = {
+    valid_suffixes = {
         "n",
         "ic",
         "nic",
@@ -163,7 +262,7 @@ def validate_filters(filters: dict) -> None:
         parts = filter_name.split("__")
 
         # Allow field__suffix pattern (e.g., name__ic, id__gt)
-        if len(parts) == 2 and parts[-1] in VALID_SUFFIXES:
+        if len(parts) == 2 and parts[-1] in valid_suffixes:
             continue
         # Block multi-hop patterns and invalid suffixes
         if len(parts) >= 2:
@@ -172,6 +271,159 @@ def validate_filters(filters: dict) -> None:
                 f"traversal or invalid lookup suffix not supported. Use direct field filters like "
                 f"'site_id' or two-step queries."
             )
+
+
+def get_readable_object_types() -> dict[str, dict[str, str]]:
+    """Return core and discovered plugin types available to read tools."""
+    return {**NETBOX_OBJECT_TYPES, **DISCOVERED_PLUGIN_OBJECT_TYPES}
+
+
+def get_read_endpoint_info(object_type: str) -> tuple[str, str | None]:
+    """Return the primary and optional fallback endpoint for a readable type."""
+    type_info = get_readable_object_types()[object_type]
+    return type_info["endpoint"], type_info.get("fallback_endpoint")
+
+
+def get_writable_endpoint(object_type: str, operation: str) -> str:
+    """Resolve a core or explicitly allowlisted plugin write endpoint."""
+    if operation not in PLUGIN_WRITE_OPERATIONS:
+        raise ValueError(f"Unsupported write operation: {operation}")
+
+    if object_type in NETBOX_OBJECT_TYPES:
+        return NETBOX_OBJECT_TYPES[object_type]["endpoint"]
+
+    if object_type not in DISCOVERED_PLUGIN_OBJECT_TYPES:
+        raise ValueError(
+            f"Invalid object_type {object_type!r}. It is neither a core type nor a discovered plugin type."
+        )
+
+    allowed_operations = PLUGIN_WRITE_RULES.get(object_type, set())
+    if operation not in allowed_operations:
+        allowed_text = ", ".join(sorted(allowed_operations)) or "none"
+        raise ValueError(
+            f"Plugin operation {operation!r} is not enabled for {object_type!r}. "
+            f"Configured operations: {allowed_text}. Set PLUGIN_WRITE_RULES and restart the server."
+        )
+
+    return DISCOVERED_PLUGIN_OBJECT_TYPES[object_type]["endpoint"]
+
+
+def discover_plugin_types(client: NetBoxRestClient) -> dict[str, dict[str, str]]:
+    """Discover plugin models with REST endpoints from the NetBox object-types API."""
+    logger = logging.getLogger(__name__)
+    plugin_types: dict[str, dict[str, str]] = {}
+
+    try:
+        offset = 0
+        limit = 100
+        while True:
+            response = client.get(
+                "core/object-types",
+                params={"limit": limit, "offset": offset},
+                fallback_endpoint="extras/object-types",
+            )
+
+            for object_type in response.get("results", []):
+                if not object_type.get("is_plugin_model", False):
+                    continue
+
+                rest_url = object_type.get("rest_api_endpoint")
+                app_label = object_type.get("app_label", "")
+                model = object_type.get("model", "")
+                if not rest_url or not app_label or not model:
+                    continue
+
+                type_key = f"{app_label}.{model}"
+                if type_key in NETBOX_OBJECT_TYPES:
+                    logger.debug(
+                        "Skipping plugin type %s because it collides with a core type", type_key
+                    )
+                    continue
+
+                endpoint = rest_url.strip("/")
+                if endpoint.startswith("api/"):
+                    endpoint = endpoint[4:]
+                if not endpoint.startswith("plugins/"):
+                    logger.warning(
+                        "Skipping plugin type %s because its REST endpoint is outside /api/plugins/: %s",
+                        type_key,
+                        rest_url,
+                    )
+                    continue
+
+                plugin_types[type_key] = {
+                    "name": object_type.get("display", model),
+                    "endpoint": endpoint,
+                }
+
+            if not response.get("next"):
+                break
+            offset += limit
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        logger.warning("Plugin discovery failed, continuing with core types only: %s", exc)
+        return {}
+
+    if plugin_types:
+        logger.info(
+            "Discovered %d plugin object types: %s",
+            len(plugin_types),
+            ", ".join(sorted(plugin_types)),
+        )
+    else:
+        logger.info("No plugin object types discovered")
+    return plugin_types
+
+
+def activate_plugin_types(
+    plugin_types: dict[str, dict[str, str]],
+    configured_write_rules: dict[str, set[str]],
+) -> set[str]:
+    """Install discovered read types and only valid operation-specific write rules.
+
+    Returns the configured type names that were not discovered and therefore remain disabled.
+    """
+    core_rule_types = set(configured_write_rules) & set(NETBOX_OBJECT_TYPES)
+    if core_rule_types:
+        raise ValueError(
+            "PLUGIN_WRITE_RULES applies only to discovered plugin types; core types are already "
+            f"controlled by NetBox permissions: {', '.join(sorted(core_rule_types))}"
+        )
+
+    DISCOVERED_PLUGIN_OBJECT_TYPES.clear()
+    DISCOVERED_PLUGIN_OBJECT_TYPES.update(plugin_types)
+    PLUGIN_WRITE_RULES.clear()
+    PLUGIN_WRITE_RULES.update(
+        {
+            object_type: set(operations)
+            for object_type, operations in configured_write_rules.items()
+            if object_type in plugin_types
+        }
+    )
+    return set(configured_write_rules) - set(plugin_types)
+
+
+async def update_read_tool_descriptions() -> None:
+    """Refresh static type lists after plugin discovery changes the read registry."""
+    type_list = "\n".join(f"- {object_type}" for object_type in sorted(get_readable_object_types()))
+    tool = await mcp.get_tool("netbox_get_objects")
+    if tool is None:
+        return
+
+    description = tool.description
+    marker = "Valid object_type values:"
+    marker_index = description.find(marker)
+    if marker_index == -1:
+        return
+
+    prefix = description[: marker_index + len(marker)]
+    suffix_marker = "See NetBox API documentation"
+    suffix_index = description.find(suffix_marker)
+    suffix = (
+        f"\n\n    {suffix_marker}" + description[suffix_index + len(suffix_marker) :]
+        if suffix_index != -1
+        else ""
+    )
+    tool.description = f"{prefix}\n\n{type_list}{suffix}"
 
 
 @mcp.tool(
@@ -244,9 +496,9 @@ def validate_filters(filters: dict) -> None:
 
     Valid object_type values:
 
-    """ +
-    "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys())) +
     """
+    + "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+    + """
 
     See NetBox API documentation for filtering options for each object type.
     """
@@ -264,15 +516,16 @@ def netbox_get_objects(
     Get objects from NetBox based on their type and filters
     """
     # Validate object_type exists in mapping
-    if object_type not in NETBOX_OBJECT_TYPES:
-        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+    readable_types = get_readable_object_types()
+    if object_type not in readable_types:
+        valid_types = "\n".join(f"- {t}" for t in sorted(readable_types))
         raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
 
     # Validate filter patterns
     validate_filters(filters)
 
     # Get API endpoint from mapping
-    endpoint = _endpoint_for_type(object_type)
+    endpoint, fallback_endpoint = get_read_endpoint_info(object_type)
 
     # Build params with pagination (parameters override filters dict)
     params = filters.copy()
@@ -292,7 +545,7 @@ def netbox_get_objects(
             params["ordering"] = ordering
 
     # Make API call
-    return netbox.get(endpoint, params=params)
+    return netbox.get(endpoint, params=params, fallback_endpoint=fallback_endpoint)
 
 
 @mcp.tool
@@ -329,12 +582,13 @@ def netbox_get_object_by_id(
         Object dict (complete or with only requested fields based on fields parameter)
     """
     # Validate object_type exists in mapping
-    if object_type not in NETBOX_OBJECT_TYPES:
-        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
+    readable_types = get_readable_object_types()
+    if object_type not in readable_types:
+        valid_types = "\n".join(f"- {t}" for t in sorted(readable_types))
         raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
 
     # Get API endpoint from mapping
-    endpoint = f"{_endpoint_for_type(object_type)}/{object_id}"
+    endpoint, fallback_endpoint = get_read_endpoint_info(object_type)
 
     params = {}
     if fields:
@@ -343,7 +597,12 @@ def netbox_get_object_by_id(
     if brief:
         params["brief"] = "1"
 
-    return netbox.get(endpoint, params=params)
+    return netbox.get(
+        endpoint,
+        id=object_id,
+        params=params,
+        fallback_endpoint=fallback_endpoint,
+    )
 
 
 @mcp.tool
@@ -419,7 +678,9 @@ def netbox_get_changelogs(filters: dict):
         query: Search term (device names, IPs, serial numbers, hostnames, site names)
                Examples: 'switch01', '192.168.1.1', 'NYC-DC1', 'SN123456'
         object_types: Limit search to specific types (optional)
-                     Default: [""" + "', '".join(DEFAULT_SEARCH_TYPES) + """]
+                     Default: ["""
+    + "', '".join(DEFAULT_SEARCH_TYPES)
+    + """]
                      Examples: ['dcim.device', 'ipam.ipaddress', 'dcim.site']
         fields: Optional list of specific fields to return (reduces response size) IT IS STRONGLY RECOMMENDED TO USE THIS PARAMETER TO MINIMIZE TOKEN USAGE.
                 - None or [] = returns all fields (no filtering)
@@ -465,39 +726,38 @@ def netbox_search_objects(
     """
     Perform global search across NetBox infrastructure.
     """
-    if object_types is None:
-        search_types = DEFAULT_SEARCH_TYPES
-    else:
-        search_types = object_types
+    search_types = DEFAULT_SEARCH_TYPES if object_types is None else object_types
 
     # Validate all object types exist in mapping
+    readable_types = get_readable_object_types()
     for obj_type in search_types:
-        if obj_type not in NETBOX_OBJECT_TYPES:
-            valid_types = "\n".join(
-                f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys())
-            )
-            raise ValueError(
-                f"Invalid object_type '{obj_type}'. Must be one of:\n{valid_types}"
-            )
+        if obj_type not in readable_types:
+            valid_types = "\n".join(f"- {t}" for t in sorted(readable_types))
+            raise ValueError(f"Invalid object_type '{obj_type}'. Must be one of:\n{valid_types}")
 
     results = {obj_type: [] for obj_type in search_types}
 
     # Build results dictionary (error-resilient)
     for obj_type in search_types:
         try:
+            endpoint, fallback_endpoint = get_read_endpoint_info(obj_type)
             response = netbox.get(
-                _endpoint_for_type(obj_type),
+                endpoint,
                 params={
                     "q": query,
                     "limit": limit,
                     "fields": ",".join(fields) if fields else None,
                 },
+                fallback_endpoint=fallback_endpoint,
             )
             # Extract results array from paginated response
             results[obj_type] = response.get("results", [])
-        except Exception:
+        except Exception as exc:
             # Continue searching other types if one fails
             # results[obj_type] already has empty list
+            logging.getLogger(__name__).debug(
+                "Search failed for object type %s", obj_type, exc_info=exc
+            )
             continue
 
     return results
@@ -506,6 +766,7 @@ def netbox_search_objects(
 # ============================================================================
 # Write Operations - Create, Update, Delete Tools
 # ============================================================================
+
 
 @mcp.tool
 def netbox_create_object(
@@ -538,11 +799,7 @@ def netbox_create_object(
             "status": "active"
         })
     """
-    if object_type not in NETBOX_OBJECT_TYPES:
-        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
-        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
-
-    endpoint = _endpoint_for_type(object_type)
+    endpoint = get_writable_endpoint(object_type, "create")
     return netbox.create(endpoint, data)
 
 
@@ -570,11 +827,7 @@ def netbox_update_object(
         # Update a VLAN's name
         netbox_update_object("ipam.vlan", 5, {"name": "VLAN-200"})
     """
-    if object_type not in NETBOX_OBJECT_TYPES:
-        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
-        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
-
-    endpoint = _endpoint_for_type(object_type)
+    endpoint = get_writable_endpoint(object_type, "update")
     return netbox.update(endpoint, object_id, data)
 
 
@@ -600,17 +853,14 @@ def netbox_delete_object(
         # Delete a VLAN
         netbox_delete_object("ipam.vlan", 5)
     """
-    if object_type not in NETBOX_OBJECT_TYPES:
-        valid_types = "\n".join(f"- {t}" for t in sorted(NETBOX_OBJECT_TYPES.keys()))
-        raise ValueError(f"Invalid object_type. Must be one of:\n{valid_types}")
-
-    endpoint = _endpoint_for_type(object_type)
+    endpoint = get_writable_endpoint(object_type, "delete")
     return netbox.delete(endpoint, object_id)
 
 
 # ============================================================================
 # Priority Objects - Sites, Tenants, Tags, VLANs
 # ============================================================================
+
 
 @mcp.tool
 def netbox_create_site(
@@ -957,6 +1207,7 @@ def netbox_delete_vlan_group(vlan_group_id: int) -> bool:
 # Additional Core Infrastructure Objects
 # ============================================================================
 
+
 @mcp.tool
 def netbox_create_region(
     name: str,
@@ -1070,6 +1321,7 @@ def netbox_delete_location(location_id: int) -> bool:
 # ============================================================================
 # IPAM Objects
 # ============================================================================
+
 
 @mcp.tool
 def netbox_create_vrf(
@@ -1288,6 +1540,7 @@ def netbox_delete_ip_range(ip_range_id: int) -> bool:
 # ============================================================================
 # DCIM Objects
 # ============================================================================
+
 
 @mcp.tool
 def netbox_create_device(
@@ -1643,6 +1896,7 @@ def netbox_delete_cable(cable_id: int) -> bool:
 # Circuit Objects
 # ============================================================================
 
+
 @mcp.tool
 def netbox_create_circuit(
     cid: str,
@@ -1814,6 +2068,7 @@ def netbox_delete_circuit_type(circuit_type_id: int) -> bool:
 # Virtualization Objects
 # ============================================================================
 
+
 @mcp.tool
 def netbox_create_virtual_machine(
     name: str,
@@ -1924,15 +2179,6 @@ def netbox_delete_cluster(cluster_id: int) -> bool:
     return netbox.delete("virtualization/clusters", cluster_id)
 
 
-def _endpoint_for_type(object_type: str) -> str:
-    """
-    Returns partial API endpoint prefix for the given object type.
-    e.g., "dcim.device" -> "dcim/devices"
-    """
-    return NETBOX_OBJECT_TYPES[object_type]['endpoint']
-
-
-
 def main() -> None:
     """Main entry point for the MCP server."""
     global netbox
@@ -1942,7 +2188,7 @@ def main() -> None:
     try:
         settings = Settings(**cli_overlay)
     except Exception as e:
-        print(f"Configuration error: {e}", file=sys.stderr)
+        print(f"Configuration error: {e}", file=sys.stderr)  # noqa: T201 - logging not configured
         sys.exit(1)
 
     configure_logging(settings.log_level)
@@ -1957,7 +2203,7 @@ def main() -> None:
             "This is insecure and should only be used for testing."
         )
 
-    if settings.transport == "http" and settings.host in ["0.0.0.0", "::", "[::]"]:
+    if settings.transport == "http" and settings.host in ["0.0.0.0", "::", "[::]"]:  # noqa: S104 - checking, not binding
         logger.warning(
             f"HTTP transport is bound to {settings.host}:{settings.port}, which exposes the service to all network interfaces (IPv4/IPv6). "
             "This is insecure and should only be used for testing. Ensure this is secured with TLS/reverse proxy if exposed to network."
@@ -1982,13 +2228,72 @@ def main() -> None:
         logger.error(f"Failed to initialize NetBox client: {e}")
         sys.exit(1)
 
+    if settings.enable_plugin_discovery:
+        try:
+            plugin_types = discover_plugin_types(netbox)
+            undiscovered_rule_types = activate_plugin_types(
+                plugin_types,
+                {
+                    object_type: set(operations)
+                    for object_type, operations in settings.plugin_write_rules.items()
+                },
+            )
+        except ValueError as exc:
+            logger.error("Invalid plugin write configuration: %s", exc)
+            sys.exit(1)
+
+        for object_type in sorted(undiscovered_rule_types):
+            logger.warning(
+                "Plugin write rule for %s is disabled because the type was not discovered",
+                object_type,
+            )
+        if PLUGIN_WRITE_RULES:
+            logger.warning(
+                "Generic plugin writes enabled: %s",
+                "; ".join(
+                    f"{object_type}={','.join(sorted(operations))}"
+                    for object_type, operations in sorted(PLUGIN_WRITE_RULES.items())
+                ),
+            )
+        asyncio.run(update_read_tool_descriptions())
+    else:
+        activate_plugin_types({}, {})
+
     try:
         if settings.transport == "stdio":
             logger.info("Starting stdio transport")
             mcp.run(transport="stdio")
         elif settings.transport == "http":
             logger.info(f"Starting HTTP transport on {settings.host}:{settings.port}")
-            mcp.run(transport="http", host=settings.host, port=settings.port)
+            auth = build_http_auth(settings.mcp_auth_token)
+            if auth is not None:
+                mcp.auth = auth
+                logger.info("HTTP transport authentication enabled (bearer token required)")
+            else:
+                logger.warning(
+                    "HTTP transport is running without authentication. Set "
+                    "MCP_AUTH_TOKEN, or place the server behind an authenticating "
+                    "TLS reverse proxy or gateway before exposing it to a network."
+                )
+            middleware = [
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=settings.cors_origins,
+                    allow_methods=["GET", "POST", "OPTIONS"],
+                    allow_headers=[
+                        "Authorization",
+                        "mcp-protocol-version",
+                        "mcp-session-id",
+                    ],
+                    expose_headers=["mcp-session-id"],
+                )
+            ]
+            mcp.run(
+                transport="http",
+                host=settings.host,
+                port=settings.port,
+                middleware=middleware,
+            )
     except Exception as e:
         logger.error(f"Failed to start MCP server: {e}")
         sys.exit(1)
