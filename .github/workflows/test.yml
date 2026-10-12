@@ -22,9 +22,10 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked --dev
-      - run: uv run ruff check src tests
-      - run: uv run ruff format --check src tests
+      - run: uv run ruff check src tests scripts
+      - run: uv run ruff format --check src tests scripts
       - run: uv run pytest --cov=netbox_mcp_server --cov-report=term-missing
+      - run: node --test tests/maintenance_tracker.test.cjs
 
   compose:
     runs-on: ubuntu-latest

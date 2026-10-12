@@ -673,6 +673,12 @@ netbox_delete_object(
 
 Contributions are welcome!  Please open an issue or submit a PR.
 
+## Maintenance
+
+See the [maintenance playbook](docs/maintenance.md) for automated dependency updates,
+container checks, security triage, the maintenance dashboard and approved releases.
+PR validation never publishes images or deploys the service.
+
 ## License
 
 This project is licensed under the Apache 2.0 license.  See the LICENSE file for details.

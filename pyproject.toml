@@ -73,6 +73,8 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S105", "S106", "S107"]
+# CLI probes print results and invoke Docker using argument arrays (never a shell).
+"scripts/*.py" = ["T201", "S603", "S607"]
 
 [tool.ruff.format]
 indent-style = "space"

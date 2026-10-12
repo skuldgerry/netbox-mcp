@@ -91,3 +91,8 @@ logs/
 .worktrees/
 
 .plans/*
+
+# Maintenance scan evidence (CI artifacts, never source)
+*-scan.json
+published-digest.json
+.cache/
