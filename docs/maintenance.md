@@ -46,8 +46,15 @@ complete Actions disablement. The tracker cannot report its own total outage.
 
 ## One-time activation checklist
 
+- Pilot status (2026-10-12): Dependabot alerts and automated security fixes are
+  enabled and verified. GitHub created security-update PRs #12-#15. PR #11 passed
+  Python 3.11-3.14 tests, Compose validation, container build/protocol checks and
+  CodeQL analysis. Its image security gate correctly failed on existing findings;
+  no exception was added. Automatic Codex review, branch rules, the dashboard and
+  scheduled published-image scanning still need the activation steps below.
+
 - [ ] Merge the pilot only after its PR checks and review are satisfactory.
-- [ ] Enable dependency graph, Dependabot alerts and **security updates** in repo
+- [x] Enable dependency graph, Dependabot alerts and **security updates** in repo
   settings. A `dependabot.yml` version-update schedule does not enable these settings.
 - [ ] In [Codex Code Review settings](https://chatgpt.com/settings/code-review), make
   this repository available and select **All PRs**, including bot-authored PRs;

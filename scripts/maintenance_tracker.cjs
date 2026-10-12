@@ -96,6 +96,7 @@ async function run({github, context, core}) {
       if (![403, 404].includes(error.status)) throw error;
       coverage.push(`- ${name}: UNKNOWN (${error.status}); access or feature enablement needs checking. ` +
         'No conclusion about the absence of vulnerabilities.');
+      pending.push(`- [ ] Restore ${name} alert coverage: verify feature enablement and scoped read access.`);
     }
   }
   const managed = [

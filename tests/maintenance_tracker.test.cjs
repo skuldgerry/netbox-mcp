@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {checkState, mergeBody} = require('../scripts/maintenance_tracker.cjs');
+const run = require('../scripts/maintenance_tracker.cjs');
 
 test('unknown and skipped checks cannot look ready', () => {
   assert.match(checkState([], []), /Unknown/);
@@ -22,4 +23,55 @@ test('human decisions outside generated block survive', () => {
   assert.ok(after.startsWith('Human note\n'));
   assert.ok(after.endsWith('- [x] Approved exception'));
   assert.throws(() => mergeBody('human replacement', 'new'), /preserve human/);
+});
+
+function reporterFixture({existing = [], denied = false} = {}) {
+  const writes = [];
+  const rest = {
+    repos: {get: async () => ({data: {default_branch: 'main', private: false}}),
+      listCommitStatusesForRef: 'statuses'},
+    pulls: {list: 'prs', listReviews: 'reviews'},
+    checks: {listForRef: 'checks'},
+    actions: {listWorkflowRuns: 'runs'},
+    issues: {listForRepo: 'issues', create: async args => writes.push(args),
+      update: async args => writes.push(args)},
+  };
+  const github = {rest, paginate: async (route, args) => {
+    if (route === 'issues') return existing;
+    if (route === 'runs') {
+      assert.equal(args.event, 'schedule');
+      assert.equal(args.branch, 'main');
+      return [];
+    }
+    if (route.startsWith('GET ') && denied) throw Object.assign(new Error('Denied'), {status: 403});
+    if (route.startsWith('GET ')) return [{security_advisory: {severity: 'critical'}}];
+    return [];
+  }};
+  const core = {summary: {addRaw: () => ({write: async () => {}})}};
+  return {github, context: {repo: {owner: 'owner', repo: 'repo'}}, core, writes};
+}
+
+test('reporter creates one actionable dashboard for missing scans and denied alert access', async () => {
+  const fixture = reporterFixture({denied: true});
+  await run(fixture);
+  assert.equal(fixture.writes.length, 1);
+  const body = fixture.writes[0].body;
+  assert.match(body, /Monitoring gap/);
+  assert.match(body, /Restore Dependabot alert coverage/);
+  assert.match(body, /UNKNOWN \(403\)/);
+  assert.doesNotMatch(body, /No pending items/);
+});
+
+test('reporter updates existing dashboard and skips unchanged writes', async () => {
+  const fixture = reporterFixture();
+  await run(fixture);
+  const existing = [{number: 42, body: fixture.writes[0].body + 'Human decision: wait for approval.'}];
+  const unchanged = reporterFixture({existing});
+  await run(unchanged);
+  assert.equal(unchanged.writes.length, 0);
+  const changed = reporterFixture({existing, denied: true});
+  await run(changed);
+  assert.equal(changed.writes.length, 1);
+  assert.equal(changed.writes[0].issue_number, 42);
+  assert.ok(changed.writes[0].body.endsWith('Human decision: wait for approval.'));
 });
