@@ -50,8 +50,10 @@ complete Actions disablement. The tracker cannot report its own total outage.
   enabled and verified. GitHub created security-update PRs #12-#15. PR #11 passed
   Python 3.11-3.14 tests, Compose validation, container build/protocol checks and
   CodeQL analysis. Its image security gate correctly failed on existing findings;
-  no exception was added. Automatic Codex review, branch rules, the dashboard and
-  scheduled published-image scanning still need the activation steps below.
+  no exception was added. The Codex Connector is connected and automatic code and
+  security review are configured for All PRs, with code review on every push.
+  An actual review result, branch rules, the dashboard and scheduled published-image
+  scanning still need the activation steps below.
 
 - [ ] Merge the pilot only after its PR checks and review are satisfactory.
 - [x] Enable dependency graph, Dependabot alerts and **security updates** in repo
