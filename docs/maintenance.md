@@ -47,19 +47,14 @@ complete Actions disablement. The tracker cannot report its own total outage.
 
 ## One-time activation checklist
 
-- Pilot status (2026-10-12): Dependabot alerts and automated security fixes are
-  enabled and verified. GitHub created security-update PRs #12-#15. PR #11 passed
-  Python 3.11-3.14 tests, Compose validation, container build/protocol checks and
-  CodeQL analysis. Its image security gate correctly failed on existing findings;
-  no exception was added. The Codex Connector is connected and automatic code and
-  security review are configured for All PRs, with code review on every push.
-  An actual review result, branch rules, the dashboard and scheduled published-image
-  scanning still need the activation steps below.
+Current validation evidence and merge readiness are recorded in
+[PR #11](https://github.com/skuldgerry/netbox-mcp/pull/11). Always check the latest
+revision rather than reusing a passing result from an older commit.
 
 - [ ] Merge the pilot only after its PR checks and review are satisfactory.
 - [x] Enable dependency graph, Dependabot alerts and **security updates** in repo
   settings. A `dependabot.yml` version-update schedule does not enable these settings.
-- [ ] In [Codex Code Review settings](https://chatgpt.com/settings/code-review), make
+- [x] In [Codex Code Review settings](https://chatgpt.com/settings/code-review), make
   this repository available and select **All PRs**, including bot-authored PRs;
   use a trigger that reviews new revisions. Personal preferences alone can miss
   Dependabot authors. Confirm a review actually appears on a representative PR.
