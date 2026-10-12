@@ -30,6 +30,24 @@ function mergeBody(existing, managed) {
   return existing.slice(0, start) + START + '\n' + managed + '\n' + existing.slice(end);
 }
 
+function completedCodexSummary(comments, repo, number, sha) {
+  return comments.some(comment => {
+    if (comment.user?.login !== 'chatgpt-codex-connector[bot]') return false;
+    const match = comment.body?.match(/<!-- codex-security-review:v1 (\{[^\n]+\}) -->/);
+    if (!match) return false;
+    try {
+      const status = JSON.parse(match[1]);
+      return status.repository === `${repo.owner}/${repo.repo}` &&
+        status.pullRequestNumber === number && status.headSha === sha &&
+        status.status === 'completed' &&
+        comment.body.includes('| 📝 **Code Review** | ✅ **Completed**') &&
+        comment.body.includes('| 🔒 **Security Review** | ✅ **Completed**');
+    } catch {
+      return false; // An unfamiliar summary is unknown, never evidence of approval.
+    }
+  });
+}
+
 async function run({github, context, core}) {
   const repo = context.repo;
   const {data: metadata} = await github.rest.repos.get(repo);
@@ -45,10 +63,14 @@ async function run({github, context, core}) {
       {...repo, ref: pr.head.sha, per_page: 100});
     const reviews = await github.paginate(github.rest.pulls.listReviews,
       {...repo, pull_number: pr.number, per_page: 100});
+    const comments = await github.paginate(github.rest.issues.listComments,
+      {...repo, issue_number: pr.number, per_page: 100});
     const codex = reviews.filter(r => r.commit_id === pr.head.sha &&
       r.user?.login === 'chatgpt-codex-connector[bot]' && r.state !== 'DISMISSED');
     const age = Math.floor((now - Date.parse(pr.updated_at)) / 86400000);
-    const review = codex.length ? 'Codex review present on current revision; inspect findings' :
+    // Clean reviews can finish with a bot summary/reaction instead of a review object.
+    const reviewed = codex.length || completedCodexSummary(comments, repo, pr.number, pr.head.sha);
+    const review = reviewed ? 'Codex review present on current revision; inspect findings' :
       'No Codex review verified on current revision';
     pending.push(`- [ ] PR #${pr.number}: ${checkState(checks, statuses)}. ${review}. ` +
       `${pr.draft ? 'Draft. ' : ''}${age >= 7 ? `No update for ${age} days. ` : ''}` +
@@ -124,3 +146,4 @@ async function run({github, context, core}) {
 module.exports = run;
 module.exports.checkState = checkState;
 module.exports.mergeBody = mergeBody;
+module.exports.completedCodexSummary = completedCodexSummary;

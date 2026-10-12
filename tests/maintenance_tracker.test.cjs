@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {checkState, mergeBody} = require('../scripts/maintenance_tracker.cjs');
 const run = require('../scripts/maintenance_tracker.cjs');
+const {completedCodexSummary} = run;
 
 test('unknown and skipped checks cannot look ready', () => {
   assert.match(checkState([], []), /Unknown/);
@@ -25,6 +26,20 @@ test('human decisions outside generated block survive', () => {
   assert.throws(() => mergeBody('human replacement', 'new'), /preserve human/);
 });
 
+test('only completed bot summaries for this PR revision count as review evidence', () => {
+  const repo = {owner: 'owner', repo: 'repo'};
+  const metadata = {repository:'owner/repo', pullRequestNumber:11, headSha:'current', status:'completed'};
+  const body = `<!-- codex-security-review:v1 ${JSON.stringify(metadata)} -->\n` +
+    '| 📝 **Code Review** | ✅ **Completed** |\n| 🔒 **Security Review** | ✅ **Completed** |';
+  const comment = {user: {login:'chatgpt-codex-connector[bot]'}, body};
+  assert.equal(completedCodexSummary([comment], repo, 11, 'current'), true);
+  assert.equal(completedCodexSummary([comment], repo, 11, 'newer'), false);
+  assert.equal(completedCodexSummary([comment], repo, 12, 'current'), false);
+  assert.equal(completedCodexSummary([{...comment,user:{login:'contributor'}}], repo, 11, 'current'), false);
+  assert.equal(completedCodexSummary([{...comment,body:body.replace('📝 **Code Review** | ✅ **Completed**','📝 **Code Review** | Running')}], repo, 11, 'current'), false);
+  assert.equal(completedCodexSummary([{...comment,body:'<!-- codex-security-review:v1 {invalid} -->'}], repo, 11, 'current'), false);
+});
+
 function reporterFixture({existing = [], denied = false} = {}) {
   const writes = [];
   const rest = {
@@ -33,7 +48,7 @@ function reporterFixture({existing = [], denied = false} = {}) {
     pulls: {list: 'prs', listReviews: 'reviews'},
     checks: {listForRef: 'checks'},
     actions: {listWorkflowRuns: 'runs'},
-    issues: {listForRepo: 'issues', create: async args => writes.push(args),
+    issues: {listForRepo: 'issues', listComments: 'comments', create: async args => writes.push(args),
       update: async args => writes.push(args)},
   };
   const github = {rest, paginate: async (route, args) => {
