@@ -36,6 +36,7 @@ flowchart LR
 | Published image scan | Daily at 06:23 UTC / manual | Pull current Docker Hub image, retain digest and scan results |
 | CodeQL | PR / main push / Monday 06:43 UTC / manual | Python security analysis; alerts in Security, not necessarily a failing analysis job |
 | Dashboard | Check completion / daily 08:53 UTC / manual | One updated issue; current-revision PR checks/reviews, stale work, missing scheduled coverage |
+| Reporter dry run | PR / main push / daily / manual | Real GitHub reads with read-only permissions; simulated issue writes verify API access without modifying issues |
 | CODEOWNERS | New non-draft PR after this file reaches main | Request `skuldgerry` review when eligible, including Dependabot changes |
 
 Schedules run on the default branch and can be delayed by GitHub. They do not

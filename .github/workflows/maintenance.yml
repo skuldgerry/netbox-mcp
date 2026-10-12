@@ -16,6 +16,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  tracker-probe:
+    name: Maintenance reporter dry run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      statuses: read
+      pull-requests: read
+      issues: read
+      security-events: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            // Real API reads with the same read permissions as the reporter.
+            // PR code receives a read-only token; issue writes are simulated.
+            const writes = [];
+            github.rest.issues.create = async args => { writes.push(args); return {data: {number: 0}}; };
+            github.rest.issues.update = async args => { writes.push(args); return {data: {number: args.issue_number}}; };
+            await require('./scripts/maintenance_tracker.cjs')({github, context, core});
+            core.notice(`Reporter API reads passed; ${writes.length} simulated issue writes, no issue changed.`);
+
   container:
     name: Container build, protocol and security
     runs-on: ubuntu-latest

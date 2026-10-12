@@ -1,4 +1,4 @@
-FROM python:3.14-alpine3.23@sha256:02da11a8d221ca167aa07de20b3cd7104c1f01227f4b02b1fa13cf6517280a81 AS builder
+FROM python:3.14-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea880cdce03538877b90c2ba932b16f AS builder
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir uv
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
 
-FROM python:3.14-alpine3.23@sha256:02da11a8d221ca167aa07de20b3cd7104c1f01227f4b02b1fa13cf6517280a81
+FROM python:3.14-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea880cdce03538877b90c2ba932b16f
 LABEL org.opencontainers.image.title="NetBox MCP Server" \
       org.opencontainers.image.description="An MCP server for reading and managing NetBox" \
       org.opencontainers.image.url="https://github.com/skuldgerry/netbox-mcp" \

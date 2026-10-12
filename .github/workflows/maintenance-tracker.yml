@@ -12,6 +12,7 @@ permissions:
   contents: read
   actions: read
   checks: read
+  statuses: read
   pull-requests: read
   issues: write
   security-events: read
