@@ -25,6 +25,11 @@ LABEL org.opencontainers.image.title="NetBox MCP Server" \
 ENV PYTHONUNBUFFERED=1
 
 RUN apk add --no-cache ca-certificates \
+    # Package installation belongs to the builder; remove pip and its bundled
+    # bootstrap copy so unused vendored dependencies are not shipped at runtime.
+    && python -m pip uninstall --yes pip \
+    && rm -rf /usr/local/lib/python3.14/ensurepip \
+    && python -c "import importlib.util; assert importlib.util.find_spec('pip') is None; assert importlib.util.find_spec('ensurepip') is None" \
     && addgroup -g 1000 appuser \
     && adduser -D -u 1000 -G appuser appuser
 

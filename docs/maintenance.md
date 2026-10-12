@@ -94,6 +94,9 @@ complete Actions disablement. The tracker cannot report its own total outage.
   channels. The public dashboard exposes only counts, generic states and links.
 - Builds and tests run on ephemeral GitHub-hosted machines with no lab connection,
   no real NetBox token, no registry push credentials and no persistent self-hosted runner.
+- The runtime image intentionally omits pip and ensurepip, including their bundled
+  dependencies. Install packages in the builder and release a new image; do not
+  install packages or bootstrap environments inside a running service container.
 - The write-enabled reporter checks out only trusted default-branch code. It must
   never run PR code or download PR artifacts. All API collections are paginated.
 - Review and scanner output are advisory evidence, not authorization for external actions.
