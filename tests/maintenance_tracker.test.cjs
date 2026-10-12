@@ -3,16 +3,26 @@ const assert = require('node:assert/strict');
 const {checkState, mergeBody} = require('../scripts/maintenance_tracker.cjs');
 const run = require('../scripts/maintenance_tracker.cjs');
 const {completedCodexSummary} = run;
+const passingJobs = () => run.REQUIRED_PR_JOBS.map(name =>
+  ({name,app:{slug:'github-actions'},status:'completed',conclusion:'success'}));
 
 test('unknown and skipped checks cannot look ready', () => {
   assert.match(checkState([], []), /Unknown/);
   assert.match(checkState([{name:'ci', status:'completed', conclusion:'skipped'}], []), /Unknown/);
   assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
     {name:'analyze', status:'completed', conclusion:'skipped'}], []), /Unknown/);
-  assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
+  assert.match(checkState([...passingJobs(),
     {name:'Published image security', app:{slug:'github-actions'}, status:'completed', conclusion:'skipped'}], []), /passed/);
   assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
     {name:'Published image security', app:{slug:'untrusted'}, status:'completed', conclusion:'skipped'}], []), /Unknown/);
+});
+
+test('missing required jobs stay unknown despite unrelated successful checks', () => {
+  assert.match(checkState(passingJobs(), []), /passed/);
+  for (const name of run.REQUIRED_PR_JOBS) {
+    assert.match(checkState(passingJobs().filter(job => job.name !== name), []), /Unknown/);
+  }
+  assert.match(checkState(passingJobs().map(job => ({...job, app:{slug:'another-app'}})), []), /Unknown/);
 });
 
 test('scheduled success requires the actual security jobs, including the published image', () => {
@@ -32,8 +42,8 @@ test('failed and pending checks override passing checks', () => {
   assert.match(checkState([passed], [{context:'legacy', state:'failure'}]), /Blocked/);
 });
 test('latest retry supersedes an old failed attempt', () => {
-  assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
-    {name:'tests', status:'completed', conclusion:'failure'}], []), /passed/);
+  assert.match(checkState([...passingJobs(),
+    {name:'test (3.11)', app:{slug:'github-actions'}, status:'completed', conclusion:'failure'}], []), /passed/);
 });
 test('human decisions outside generated block survive', () => {
   const before = 'Human note\n<!-- maintenance-dashboard:start -->\nold\n<!-- maintenance-dashboard:end -->\n- [x] Approved exception';

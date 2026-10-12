@@ -1,6 +1,8 @@
 /* The write-enabled reporter consumes API metadata only, never PR code/artifacts. */
 const START = '<!-- maintenance-dashboard:start -->';
 const END = '<!-- maintenance-dashboard:end -->';
+const REQUIRED_PR_JOBS = ['test (3.11)', 'test (3.12)', 'test (3.13)', 'test (3.14)',
+  'compose', 'Container build, protocol and security', 'Maintenance reporter dry run', 'analyze'];
 
 function checkState(runs, statuses) {
   // GitHub returns newest first; only the latest result for each check/context counts.
@@ -26,6 +28,10 @@ function checkState(runs, statuses) {
   if (pending) return 'Waiting for checks';
   if (unknown) return 'Unknown: skipped or neutral checks require coverage verification';
   if (!passed) return 'Unknown: no successful checks reported';
+  if (!REQUIRED_PR_JOBS.every(name => [...latest.values()].some(r =>
+    r.name === name && r.app?.slug === 'github-actions' && r.conclusion === 'success'))) {
+    return 'Unknown: required PR jobs are missing or not verified as successful';
+  }
   return 'Reported checks passed; verify required coverage and review';
 }
 
@@ -167,3 +173,4 @@ module.exports.checkState = checkState;
 module.exports.mergeBody = mergeBody;
 module.exports.completedCodexSummary = completedCodexSummary;
 module.exports.scheduledJobsPassed = scheduledJobsPassed;
+module.exports.REQUIRED_PR_JOBS = REQUIRED_PR_JOBS;
