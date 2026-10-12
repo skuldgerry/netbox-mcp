@@ -7,6 +7,23 @@ const {completedCodexSummary} = run;
 test('unknown and skipped checks cannot look ready', () => {
   assert.match(checkState([], []), /Unknown/);
   assert.match(checkState([{name:'ci', status:'completed', conclusion:'skipped'}], []), /Unknown/);
+  assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
+    {name:'analyze', status:'completed', conclusion:'skipped'}], []), /Unknown/);
+  assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
+    {name:'Published image security', app:{slug:'github-actions'}, status:'completed', conclusion:'skipped'}], []), /passed/);
+  assert.match(checkState([{name:'tests', status:'completed', conclusion:'success'},
+    {name:'Published image security', app:{slug:'untrusted'}, status:'completed', conclusion:'skipped'}], []), /Unknown/);
+});
+
+test('scheduled success requires the actual security jobs, including the published image', () => {
+  const success = name => ({name,status:'completed',conclusion:'success'});
+  assert.equal(run.scheduledJobsPassed('codeql.yml', [success('analyze')]), true);
+  assert.equal(run.scheduledJobsPassed('codeql.yml', [{name:'analyze',status:'completed',conclusion:'skipped'}]), false);
+  assert.equal(run.scheduledJobsPassed('codeql.yml', []), false);
+  const jobs = ['Container build, protocol and security','Published image security','Maintenance reporter dry run'].map(success);
+  assert.equal(run.scheduledJobsPassed('maintenance.yml', jobs), true);
+  jobs[1].conclusion = 'skipped';
+  assert.equal(run.scheduledJobsPassed('maintenance.yml', jobs), false);
 });
 test('failed and pending checks override passing checks', () => {
   const passed = {name:'tests', status:'completed', conclusion:'success'};

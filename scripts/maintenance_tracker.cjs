@@ -18,10 +18,22 @@ function checkState(runs, statuses) {
     [...contexts.values()].some(s => s.state === 'pending');
   const passed = [...latest.values()].some(r => r.conclusion === 'success') ||
     [...contexts.values()].some(s => s.state === 'success');
+  // This helper summarizes PR checks. The published-image job is intentionally
+  // scheduled/manual-only; every other skipped/neutral check needs inspection.
+  const unknown = [...latest.values()].some(r => ['skipped', 'neutral'].includes(r.conclusion) &&
+    !(r.name === 'Published image security' && r.app?.slug === 'github-actions'));
   if (failed) return 'Blocked: inspect failed checks';
   if (pending) return 'Waiting for checks';
+  if (unknown) return 'Unknown: skipped or neutral checks require coverage verification';
   if (!passed) return 'Unknown: no successful checks reported';
   return 'Reported checks passed; verify required coverage and review';
+}
+
+function scheduledJobsPassed(file, jobs) {
+  const required = file === 'codeql.yml' ? ['analyze'] :
+    ['Container build, protocol and security', 'Published image security', 'Maintenance reporter dry run'];
+  return required.every(name => jobs.some(job => job.name === name &&
+    job.status === 'completed' && job.conclusion === 'success'));
 }
 
 function mergeBody(existing, managed) {
@@ -95,7 +107,14 @@ async function run({github, context, core}) {
       pending.push(`- [ ] Monitoring/security check needs attention: [${file}](${latest.html_url}) ` +
         `ended ${latest.conclusion}. A failure is not by itself evidence of a vulnerability.`);
     } else {
-      coverage.push(`- ${file}: [scheduled run passed](${latest.html_url}) at ${latest.updated_at}.`);
+      const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun,
+        {...repo, run_id: latest.id, filter: 'latest', per_page: 100});
+      if (scheduledJobsPassed(file, jobs)) {
+        coverage.push(`- ${file}: [scheduled jobs passed](${latest.html_url}) at ${latest.updated_at}.`);
+      } else {
+        pending.push(`- [ ] Monitoring gap: [${file}](${latest.html_url}) did not complete all required jobs successfully. ` +
+          'Coverage is UNKNOWN; inspect skipped, missing or incomplete jobs.');
+      }
     }
   }
 
@@ -147,3 +166,4 @@ module.exports = run;
 module.exports.checkState = checkState;
 module.exports.mergeBody = mergeBody;
 module.exports.completedCodexSummary = completedCodexSummary;
+module.exports.scheduledJobsPassed = scheduledJobsPassed;
