@@ -125,7 +125,8 @@ async function run({github, context, core}) {
   }
 
   // Do not disclose advisory details or exploit information in a public dashboard.
-  // Default GITHUB_TOKEN may not read Dependabot alerts; report denied coverage explicitly.
+  // Dependabot needs vulnerability-alerts: read; security-events covers code scanning.
+  // Keep denied coverage unknown, even when a workflow requests the correct scope.
   for (const [name, route] of [
     ['Dependabot', 'GET /repos/{owner}/{repo}/dependabot/alerts'],
     ['Code scanning', 'GET /repos/{owner}/{repo}/code-scanning/alerts'],
@@ -137,12 +138,14 @@ async function run({github, context, core}) {
       const high = alerts.filter(a => (a.security_advisory?.severity ||
         a.rule?.security_severity_level) === 'high').length;
       coverage.push(`- ${name}: ${alerts.length} open alerts (${critical} critical, ${high} high).`);
+      core.notice(`${name} alert read verified: ${alerts.length} open (${critical} critical, ${high} high).`);
       if (alerts.length) pending.push(`- [ ] Triage ${name} alerts in the repository Security tab; ` +
         'confirm exposure, affected versions and fix availability.');
     } catch (error) {
       if (![403, 404].includes(error.status)) throw error;
       coverage.push(`- ${name}: UNKNOWN (${error.status}); access or feature enablement needs checking. ` +
         'No conclusion about the absence of vulnerabilities.');
+      core.notice(`${name} alert coverage UNKNOWN (${error.status}); the API read did not succeed.`);
       pending.push(`- [ ] Restore ${name} alert coverage: verify feature enablement and scoped read access.`);
     }
   }

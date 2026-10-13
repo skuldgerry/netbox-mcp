@@ -89,8 +89,10 @@ function reporterFixture({existing = [], denied = false} = {}) {
     if (route.startsWith('GET ')) return [{security_advisory: {severity: 'critical'}}];
     return [];
   }};
-  const core = {summary: {addRaw: () => ({write: async () => {}})}};
-  return {github, context: {repo: {owner: 'owner', repo: 'repo'}}, core, writes};
+  const notices = [];
+  const core = {notice: message => notices.push(message),
+    summary: {addRaw: () => ({write: async () => {}})}};
+  return {github, context: {repo: {owner: 'owner', repo: 'repo'}}, core, writes, notices};
 }
 
 test('reporter creates one actionable dashboard for missing scans and denied alert access', async () => {
@@ -102,6 +104,15 @@ test('reporter creates one actionable dashboard for missing scans and denied ale
   assert.match(body, /Restore Dependabot alert coverage/);
   assert.match(body, /UNKNOWN \(403\)/);
   assert.doesNotMatch(body, /No pending items/);
+  assert.ok(fixture.notices.includes('Dependabot alert coverage UNKNOWN (403); the API read did not succeed.'));
+  assert.ok(fixture.notices.every(message => !message.includes('read verified')));
+});
+
+test('successful alert API reads are observable independently of overall job success', async () => {
+  const fixture = reporterFixture();
+  await run(fixture);
+  assert.ok(fixture.notices.includes('Dependabot alert read verified: 1 open (1 critical, 0 high).'));
+  assert.ok(fixture.notices.includes('Code scanning alert read verified: 1 open (1 critical, 0 high).'));
 });
 
 test('reporter updates existing dashboard and skips unchanged writes', async () => {

@@ -68,9 +68,17 @@ revision rather than reusing a passing result from an older commit.
   the maintainer. No auto-merge or bypass is configured by this pilot.
 - [ ] Run Maintenance manually on main to establish published-image coverage,
   then verify the first scheduled run and dashboard update.
-- [ ] Verify access to Security alerts. The default Actions token may not read
-  Dependabot alerts; the dashboard reports this as UNKNOWN. Keep GitHub's native
-  security notifications enabled until a scoped integration provides central coverage.
+- [ ] Verify access to Security alerts using the reporter job's API-read notices.
+  Dependabot requires `vulnerability-alerts: read` on `GITHUB_TOKEN`; `security-events: read`
+  covers Code Scanning instead. No PAT is required for this read-only path. A denied
+  request remains UNKNOWN, never zero alerts, and an overall successful reporter job
+  alone does not prove alert access. Keep GitHub's native security notifications enabled.
+
+The reporter's required-job list is a coverage check, not branch protection. Inspect
+the repository's actual branch rules separately before claiming checks are enforced.
+Likewise, a disabled tracker workflow must be re-enabled by an explicit maintainer
+decision; a code change does not restore its execution. Manual or push runs do not
+replace evidence from runs whose event is `schedule`.
 - [ ] Subscribe the maintainer to relevant GitHub security/Actions notifications.
   No email, chat webhook, paid review credits or production credentials are enabled here.
 - [ ] Validate approved-release build and publication separately on the dedicated

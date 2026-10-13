@@ -16,6 +16,8 @@ permissions:
   pull-requests: read
   issues: write
   security-events: read
+  # No PAT or additional write permission is needed for Dependabot alert reads.
+  vulnerability-alerts: read
 
 concurrency:
   group: maintenance-tracker
