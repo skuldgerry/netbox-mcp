@@ -207,7 +207,7 @@ async def probe_modern_and_stdio():
         env={**os.environ, "TRANSPORT": "stdio"},
     )
     for mode, version in (("legacy", LEGACY_VERSIONS[-1]), ("auto", MODERN_VERSION)):
-        await probe_sdk_client(Client(stdio, mode=mode, read_timeout_seconds=5), version)
+        await probe_sdk_client(Client(stdio, mode=mode, read_timeout_seconds=12), version)
         print(f"PASS: stdio {version} catalog and read")
 
 

@@ -39,6 +39,8 @@ def main():
                 'CORS_ORIGINS=["https://smoke.example"]',
                 "--env",
                 "FASTMCP_HTTP_SESSION_IDLE_TIMEOUT=3",
+                "--env",
+                "FASTMCP_CHECK_FOR_UPDATES=off",
                 image,
             ],
             check=True,
