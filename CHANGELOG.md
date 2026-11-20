@@ -10,8 +10,9 @@ uses semantic versioning.
 ### Changed
 
 - Migrate to FastMCP 4 and MCP SDK 2 with the existing HTTP and stdio configuration.
-- Legacy HTTP sessions now expire after 30 minutes without client activity by default.
-  Clients holding an expired session must reconnect before making another tool call.
+- Legacy HTTP sessions now expire after 30 minutes with no requests in flight by default.
+  If a tool call receives HTTP 404 because its session expired, reconnect with the existing
+  bearer token and retry the call.
 - Allow the MCP routing headers used by modern browser clients from configured CORS origins.
 
 ## [1.1.1] - 2026-10-13

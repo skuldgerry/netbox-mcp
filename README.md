@@ -169,8 +169,9 @@ claude mcp add --transport http netbox http://127.0.0.1:8000/mcp
 
 MCP clients connect to the same endpoint over Streamable HTTP. Clients using a 2025 protocol
 revision still open a session with `initialize`. Legacy HTTP sessions expire after 30 minutes
-without client activity by default. If a request gets HTTP 404 for an expired session, open a
-new session. Clients using the `2026-07-28` protocol send self-contained requests without a
+with no requests in flight by default. An open SSE stream keeps the session active. If a tool
+call receives HTTP 404 for an expired session, reconnect with the existing bearer token and
+retry the call. Clients using the `2026-07-28` protocol send self-contained requests without a
 transport session. The bearer header applies in both cases.
 
 ### Claude Desktop
