@@ -167,6 +167,12 @@ claude mcp add --transport http netbox http://127.0.0.1:8000/mcp
 - The server must be running before Claude Code can connect
 - Verify the connection with `claude mcp list` - you should see a ✓ next to the server name
 
+MCP clients connect to the same endpoint over Streamable HTTP. Clients using a 2025 protocol
+revision still open a session with `initialize`. Legacy HTTP sessions expire after 30 minutes
+without client activity by default. If a request gets HTTP 404 for an expired session, open a
+new session. Clients using the `2026-07-28` protocol send self-contained requests without a
+transport session. The bearer header applies in both cases.
+
 ### Claude Desktop
 
 Add the server configuration to your Claude Desktop config file. On Mac, edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -524,8 +530,9 @@ docker-compose down
 
 When connecting to the MCP server from n8n, ensure your HTTP client sends the required headers:
 
-**Required Headers:**
-- `Accept: text/event-stream` (required for Server-Sent Events)
+**Streamable HTTP headers**
+
+- `Accept: application/json, text/event-stream` (the endpoint can return JSON or an event stream)
 - `Content-Type: application/json` (for JSON-RPC requests)
 - `Authorization: Bearer <token>` (required when `MCP_AUTH_TOKEN` is configured)
 
@@ -561,10 +568,10 @@ When connecting to the MCP server from n8n, ensure your HTTP client sends the re
 
 **Testing the Endpoint:**
 
-The `/mcp` endpoint requires SSE support. Direct browser access will show an error because browsers don't send the required `Accept: text/event-stream` header. This is expected behavior. Use an MCP-compatible client (like n8n) that properly handles SSE connections.
+Use a Streamable HTTP MCP client to test `/mcp`. A browser address bar does not send the MCP request or the configured bearer token.
 
 **Troubleshooting:**
-- If you see "Not Acceptable: Client must accept text/event-stream", ensure your client sends the `Accept: text/event-stream` header
+- If you see "Not Acceptable", verify that your client accepts both JSON and SSE
 - If connection fails, check server logs and verify the server is running
 - For n8n-specific issues, see the [n8n MCP documentation](https://docs.n8n.io/advanced-ai/accessing-n8n-mcp-server/)
 

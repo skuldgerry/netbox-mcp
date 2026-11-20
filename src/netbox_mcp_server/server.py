@@ -2282,6 +2282,8 @@ def main() -> None:
                     allow_methods=["GET", "POST", "OPTIONS"],
                     allow_headers=[
                         "Authorization",
+                        "mcp-method",
+                        "mcp-name",
                         "mcp-protocol-version",
                         "mcp-session-id",
                     ],

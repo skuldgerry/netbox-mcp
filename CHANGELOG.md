@@ -7,6 +7,13 @@ uses semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Migrate to FastMCP 4 and MCP SDK 2 with the existing HTTP and stdio configuration.
+- Legacy HTTP sessions now expire after 30 minutes without client activity by default.
+  Clients holding an expired session must reconnect before making another tool call.
+- Allow the MCP routing headers used by modern browser clients from configured CORS origins.
+
 ## [1.1.1] - 2026-10-13
 
 ### Security
