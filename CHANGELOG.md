@@ -7,13 +7,27 @@ uses semantic versioning.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
 ### Changed
 
-- Migrate to FastMCP 4 and MCP SDK 2 with the existing HTTP and stdio configuration.
+- Migrate to FastMCP 4.1.8 and MCP SDK 2.3.0. The `/mcp` URL, bearer authentication, and stdio
+  configuration are unchanged.
+- Support the 2026-07-28 MCP protocol over HTTP and stdio alongside existing handshake-based clients.
 - Legacy HTTP sessions now expire after 30 minutes with no requests in flight by default.
   If a tool call receives HTTP 404 because its session expired, reconnect with the existing
   bearer token and retry the call.
 - Allow the MCP routing headers used by modern browser clients from configured CORS origins.
+
+### Security
+
+- Refresh the pinned Python 3.14 / Alpine 3.23 base and update the Python runtime dependencies.
+- Update GitPython, virtualenv, and filelock in the development environment.
+
+### Maintenance
+
+- Extend the isolated container tests to cover TLS, both HTTP protocol eras, and session recovery.
+- Refresh the GitHub Actions pins and correct the Dependabot alert permissions used by the reporter.
 
 ## [1.1.1] - 2026-10-13
 
@@ -62,6 +76,7 @@ uses semantic versioning.
 - Corrected bulk CRUD requests to use NetBox collection endpoints instead of a nonexistent
   `/bulk/` suffix.
 
-[Unreleased]: https://github.com/skuldgerry/netbox-mcp/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/skuldgerry/netbox-mcp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/skuldgerry/netbox-mcp/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/skuldgerry/netbox-mcp/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/skuldgerry/netbox-mcp/compare/v1.0.0...v1.1.0
