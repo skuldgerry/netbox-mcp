@@ -22,9 +22,9 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.28.1",
-    "fastmcp>=4.1.8,<5",
-    "pydantic>=2.13.4",
-    "pydantic-settings>=2.14.1",
+    "fastmcp>=4.2.1,<5",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.3",
 ]
 
 [project.scripts]
@@ -42,7 +42,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "python-semantic-release>=10.5.3",
-    "ruff>=0.15.16",
+    "ruff>=0.17.5",
 ]
 
 [tool.semantic_release]
